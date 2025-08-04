@@ -13,7 +13,7 @@ import asyncio
 import datetime
 
 class ScalpingBot:
-    def __init__(self, symbol="USDCUSDT", spread=0.0001, quantity=100.0, interval=5):
+    def __init__(self, symbol="USDCUSDT", spread=0.0001, quantity=10.0, interval=5):
         self.symbol = symbol
         self.spread = spread  # мінімальний спред для прибутку
         self.quantity = quantity  # обсяг торгів
@@ -23,14 +23,22 @@ class ScalpingBot:
         self.thread = None
         self.buy_order_id = None
         self.sell_order_id = None
+        self.last_buy_price = None
+
+        self.total_profit = 0.0
 
     def start(self):
         if not self.running:
             self.running = True
             self.thread = threading.Thread(target=self.run)
+            account = client.get_account()
             self.thread.start()
 
     def stop(self):
+        for b in account['balances']:
+                if float(b['free']) > 0:
+                    print(b['asset'], b['free'])
+
         self.running = False
         if self.thread:
             self.thread.join()
@@ -45,16 +53,29 @@ class ScalpingBot:
 
                 best_bid = float(depth["bids"][0][0])
                 best_ask = float(depth["asks"][0][0])
+                print(f"Best Bid: {best_bid}, Best Ask: {best_ask}")
 
                 buy_price = round(best_bid - self.spread, 5)
                 sell_price = round(best_ask + self.spread, 5)
 
+                # Перевірка стоп-лоссу
+                if self.last_buy_price:
+                    stop_price = round(self.last_buy_price * (1 - self.stop_loss_percent), 5)
+                    if best_bid < stop_price:
+                        self.api.cancel_order(self.symbol, self.sell_order_id)
+                        profit = (best_bid - self.last_buy_price) * self.quantity
+                        self.total_profit += profit
+                        self.log_event("STOP_LOSS", f"Sell @ {best_bid} due to stop-loss, profit: {profit:.5f}")
+                        self.last_buy_price = None
+                        time.sleep(self.interval)
+                        continue
                 # Скасування попередніх ордерів (якщо є)
                 if self.buy_order_id:
                     self.api.cancel_order(self.symbol, self.buy_order_id)
                 if self.sell_order_id:
                     self.api.cancel_order(self.symbol, self.sell_order_id)
-
+                else:
+                    self.buy_order_id = None
                 # Виставлення нових ордерів
                 buy_order = self.api.place_limit_order(
                     symbol=self.symbol,
@@ -62,12 +83,14 @@ class ScalpingBot:
                     quantity=self.quantity,
                     price=buy_price
                 )
+                print(f"BUY quantity: {self.quantity}, price: {buy_price}")
                 sell_order = self.api.place_limit_order(
                     symbol=self.symbol,
                     side="SELL",
                     quantity=self.quantity,
                     price=sell_price
                 )
+                print(f"SELL quantity: {self.quantity}, price: {sell_price}")
 
                 self.buy_order_id = buy_order["orderId"] if buy_order else None
                 self.sell_order_id = sell_order["orderId"] if sell_order else None
@@ -165,7 +188,7 @@ class SimulatedScalpingBot:
             # умовна реалізація продажу (кожен другий цикл)
             if self.open_orders:
                 open_buy = self.open_orders.pop(0)
-                sell_price_exec = round(open_buy["price"] + 0.001, 5)Ы
+                sell_price_exec = round(open_buy["price"] + 0.001, 5)
                 self.test_balance += sell_price_exec * open_buy["quantity"]
 
                 order = Order(
@@ -189,3 +212,9 @@ class SimulatedScalpingBot:
 
     def stop(self):
         self.active = False
+
+
+account = client.get_account()
+for b in account['balances']:
+    if float(b['free']) > 0:
+        print(b['asset'], b['free'])
