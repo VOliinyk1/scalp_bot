@@ -10,6 +10,18 @@ class BinanceAPI:
     def __init__(self):
         self.client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 
+
+    def get_klines(symbol: str, interval: str = "5m", limit: int = 100):
+        try:
+            return client.get_klines(symbol=symbol.upper(), interval=interval, limit=limit)
+        except BinanceAPIException as e:
+            print(f"[BINANCE ERROR] {e}")
+            return []
+        except Exception as e:
+            print(f"[UNKNOWN ERROR] {e}")
+            return []
+
+
     def get_order_book(self, symbol: str, limit: int = 5):
         """Отримати топ ордербуку"""
         try:
@@ -43,20 +55,3 @@ class BinanceAPI:
         except BinanceAPIException as e:
             print(f"❌ Error cancelling order: {e}")
             return None
-
-from binance.client import Client
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-api_key = os.getenv("BINANCE_API_KEY")
-api_secret = os.getenv("BINANCE_API_SECRET")
-
-client = Client(api_key, api_secret)
-
-try:
-    account_info = client.get_account()
-    print("✅ Успішно підключено!")
-except Exception as e:
-    print("❌ ПОМИЛКА:", e)

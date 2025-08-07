@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="D:\scalp_bot\scalp_bot_binance_v0.001\venv"
+VIRTUAL_ENV="D:\trade_bot\trade_bot_binance_v0.001\venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
