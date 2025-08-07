@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import datetime
-from binance_api import get_klines
+from app.binance_api import BinanceAPI
+
+client = BinanceAPI()
 
 def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
     delta = prices.diff()
@@ -23,7 +25,7 @@ def calculate_macd(data: pd.Series):
 
 def detect_signal(symbol: str, interval: str = "5m", limit: int = 100) -> dict:
     try:
-        klines = get_klines(symbol, interval=interval, limit=limit)
+        klines = client.get_klines(symbol=symbol, interval="5m", limit=100)
         df = pd.DataFrame(klines, columns=[
             "timestamp", "open", "high", "low", "close", "volume",
             "close_time", "quote_asset_volume", "number_of_trades",

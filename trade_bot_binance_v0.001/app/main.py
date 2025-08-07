@@ -1,21 +1,15 @@
 # app/main.py
 
-from ai_signals import detect_signal
-from fastapi import FastAPI
-
-from database import get_db
-from models import Log, Order
-from sqlalchemy.orm import Session
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
-from fastapi import Depends
 from sqlalchemy.orm import Session
-from database import get_db
 
+from app.ai_signals import detect_signal
+from app.database import get_db
+from app.models import Log, Order
 
 app = FastAPI(title="Trade Bot")
-
-
 
 # CORS (на випадок, якщо буде frontend)
 app.add_middleware(
@@ -30,6 +24,7 @@ app.add_middleware(
 @app.get("/")
 def main():
     return {"message": "Hello, FastAPI!"}
+
 
 @app.get("/signal/{symbol}")
 def get_signal(symbol: str):

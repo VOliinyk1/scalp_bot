@@ -11,7 +11,7 @@ class BinanceAPI:
         self.client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 
 
-    def get_klines(symbol: str, interval: str = "5m", limit: int = 100):
+    def get_klines(symbol: str, interval: str, limit: int):
         try:
             return client.get_klines(symbol=symbol.upper(), interval=interval, limit=limit)
         except BinanceAPIException as e:
