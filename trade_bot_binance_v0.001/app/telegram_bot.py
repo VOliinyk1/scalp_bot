@@ -75,7 +75,7 @@ async def ai_signal_handler(message: types.Message):
         reply += f"\nФінальний сигнал: *{signal}*\n"
         reply += f"BUY: `{weights.get('BUY', 0):.2f}`, SELL: `{weights.get('SELL', 0):.2f}`, HOLD: `{weights.get('HOLD', 0):.2f}`\n"
 
-        await message.answer(reply)
+        await message.answer(reply, parse_mode="Markdown")
 
     except Exception as e:
         await message.answer(f"❌ Внутрішня помилка: {e}")

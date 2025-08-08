@@ -65,7 +65,17 @@ def detect_signal(symbol: str) -> dict:
         smart = analyze_top_traders(symbol)
 
         # === GPT-сентимент ===
-        news = analyze_sentiment([], symbol=symbol)  # в майбутньому передати новини сюди
+        techs = {
+            "rsi": rsi,
+            "ema_short": ema_short.iloc[-1],
+            "ema_long": ema_long.iloc[-1],
+            "macd": macd_line.iloc[-1],
+            "macd_signal": signal_line.iloc[-1],
+            "volume_spike": volume_spike,
+            "reasons": reasons
+        }
+        print(f"Techs for {symbol}: {techs}")
+        news = analyze_sentiment([], symbol=symbol, techs=techs)  # в майбутньому передати новини сюди
 
         # === Аггрегація ===
         votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
