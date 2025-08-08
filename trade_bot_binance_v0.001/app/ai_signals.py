@@ -5,13 +5,20 @@ from app.binance_api import BinanceAPI
 
 client = BinanceAPI()
 
-def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
+def calculate_rsi(prices: pd.Series, period: int = 14) -> float | None:
     delta = prices.diff()
     gain = delta.where(delta > 0, 0).rolling(window=period).mean()
     loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
     rs = gain / loss
-    return 100 - (100 / (1 + rs))[-1]
+    rsi_series = 100 - (100 / (1 + rs))
 
+    rsi_series = rsi_series.dropna()
+    if rsi_series.empty:
+        return None
+
+    return rsi_series.iloc[-1]
+
+    return rsi_series.dropna().iloc[-1]
 def calculate_ema(data: pd.Series, period: int) -> pd.Series:
     return data.ewm(span=period, adjust=False).mean()
 
@@ -23,9 +30,9 @@ def calculate_macd(data: pd.Series):
     histogram = macd_line - signal_line
     return macd_line, signal_line, histogram
 
-def detect_signal(symbol: str, interval: str = "5m", limit: int = 100) -> dict:
+def detect_signal(symbol: str) -> dict:
     try:
-        klines = client.get_klines(symbol=symbol, interval="5m", limit=100)
+        klines = client.get_klines(symbol=symbol.upper(), interval='5m', limit=100)
         df = pd.DataFrame(klines, columns=[
             "timestamp", "open", "high", "low", "close", "volume",
             "close_time", "quote_asset_volume", "number_of_trades",
@@ -72,8 +79,10 @@ def detect_signal(symbol: str, interval: str = "5m", limit: int = 100) -> dict:
         }
 
     except Exception as e:
+        import traceback
         return {
             "symbol": symbol,
             "signal": "ERROR",
-            "error": str(e)
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }
