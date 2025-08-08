@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from sqlalchemy.orm import Session
 import threading
+import asyncio
+from aiogram import executor
 
-from app.ai_signals import detect_signal
+from app.services.ai_signals import detect_signal
 from app.database import get_db
 from app.models import Log, Order
-from app.telegram_bot import start_telegram_bot
+from app.telegram_bot import dp, bot, start_telegram_bot
 
 app = FastAPI(title="Trade Bot")
 
@@ -42,3 +44,5 @@ def launch_telegram_bot():
     Запускаємо Telegram бота в окремому потоці
     """
     threading.Thread(target=start_telegram_bot, daemon=True).start()
+
+
