@@ -74,7 +74,7 @@ def detect_signal(symbol: str) -> dict:
             "volume_spike": volume_spike,
             "reasons": reasons
         }
-        print(f"Techs for {symbol}: {techs}")
+        
         news = analyze_sentiment([], symbol=symbol, techs=techs)  # в майбутньому передати новини сюди
 
         # === Аггрегація ===

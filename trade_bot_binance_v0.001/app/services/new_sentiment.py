@@ -7,14 +7,14 @@ openai.api_key = OPENAI_API_KEY
 def analyze_sentiment(news: list[str], symbol: str, techs: dict) -> dict:
     try:
         if not news:
-            news = [f"Проаналізуйте поточні настрої та прогнози на ринку для {symbol} з урахуванням технічних показників: {techs}"]
+            news = [f"Проаналізуйте поточні настрої та прогнози на ринку для {symbol} з урахуванням технічних показників: {techs} і заганого настрою ринку"]
 
         prompt = "\n".join(news)
 
         response = openai.ChatCompletion.create(
             model="gpt-5-nano",  # або "gpt-" якщо дешевше
             messages=[
-                {"role": "system", "content": "Ти фінансовий аналітик. Дай відповідь SELL, BUY або HOLD і коротке пояснення. Українською мовою. Без спецсимволів. Не використовуй разом SELL, BUY і HOLD в тексті."},
+                {"role": "system", "content": "Ти фінансовий аналітик. Дай відповідь SELL, BUY або HOLD і пояснення. Українською мовою. Без спецсимволів. Не використовуй разом SELL, BUY і HOLD в тексті."},
                 {"role": "user", "content": prompt}
             ],
         )
