@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Enum, func
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -37,3 +37,12 @@ class Log(Base):
     level = Column(String)  # INFO, WARNING, ERROR
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+class Signal(Base):
+    __tablename__ = "signals"
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(32), index=True, nullable=False)
+    final_signal = Column(String(8), nullable=False)  # BUY/SELL/HOLD
+    weights = Column(JSON, nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
