@@ -1,10 +1,14 @@
 # app/binance_api.py
 
+import pandas as pd
+
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 from ..config import BINANCE_API_KEY, BINANCE_API_SECRET
 
 client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+
+
 
 class BinanceAPI:
     def __init__(self):
@@ -59,3 +63,25 @@ class BinanceAPI:
         except BinanceAPIException as e:
             print(f"❌ Error cancelling order: {e}")
             return None
+    
+    def get_ohlcv(self, symbol: str, interval: str = '5m', limit: int = 100) -> pd.DataFrame:
+        """
+        Отримує OHLCV у форматі DataFrame з колонками:
+        ts, open, high, low, close, volume
+        """
+        raw = self.get_klines(symbol, interval, limit)
+        if not raw:
+            return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+
+        df = pd.DataFrame(raw, columns=[
+            "open_time","open","high","low","close","volume",
+            "close_time","qav","num_trades","taker_base_vol","taker_quote_vol","ignore"
+        ])
+
+        df = df[["open_time","open","high","low","close","volume"]].copy()
+        df["ts"] = df["open_time"].astype(np.int64)  # Binance вже в мс
+        for col in ["open","high","low","close","volume"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df = df[["ts","open","high","low","close","volume"]].dropna().sort_values("ts").reset_index(drop=True)
+        return df

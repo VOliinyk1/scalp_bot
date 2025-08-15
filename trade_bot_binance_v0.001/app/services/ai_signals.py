@@ -234,7 +234,7 @@ def load_weights() -> Dict[str, float]:
 # Main aggregation
 # =========================
 
-def detect_signal(symbol: str) -> dict:
+def detect_signal(symbol: str, techs=None) -> dict:
     try:
         # fetch data
         df_5m = _fetch(symbol, "5m", 200)
@@ -324,4 +324,4 @@ def detect_signal(symbol: str) -> dict:
         }
 
     except Exception as e:
-        return {"symbol": symbol, "final_signal": "ERROR", "error": str(e)}
+        return {"symbol": symbol, "final_signal": "ERROR", "error": str(e), "techs": techs or {}}

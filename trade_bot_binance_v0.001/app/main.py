@@ -11,11 +11,13 @@ import threading
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import select, desc
 
 from app.services.ai_signals import detect_signal
 from app.database import get_db
 from app.models import Signal
 from app.telegram_bot import start_telegram_bot
+from app.database import SessionLocal
 
 app = FastAPI(title="Trade Bot")
 
@@ -63,6 +65,14 @@ def latest_signal(symbol: str, db: Session = Depends(get_db)):
         "weights": row.weights,
         "details": row.details,
         "created_at": row.created_at.isoformat()
+    }
+
+@app.get("/signals/latest")
+def latest(db=Depends(get_db)):
+    row = db.execute(select(Signal).order_by(desc(Signal.created_at)).limit(1)).scalar_one_or_none()
+    return {} if row is None else {
+        "ts": row.created_at, "symbol": row.symbol, "timeframe": row.timeframe,
+        "signal": row.signal, "p_buy": row.p_buy, "p_sell": row.p_sell
     }
 
 @app.on_event("startup")
