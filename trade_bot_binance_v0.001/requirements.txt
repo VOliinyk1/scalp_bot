@@ -6,3 +6,13 @@ psycopg2-binary
 python-dotenv
 python-binance
 aiogram
+pandas
+numpy
+scikit-learn
+joblib
+openai
+requests
+numpy
+matplotlib
+seaborn
+statsmodels

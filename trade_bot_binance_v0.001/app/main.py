@@ -75,6 +75,62 @@ def latest(db=Depends(get_db)):
         "signal": row.signal, "p_buy": row.p_buy, "p_sell": row.p_sell
     }
 
+@app.get("/smart_money/{symbol}")
+def get_smart_money_signal(symbol: str):
+    """
+    Get Smart Money analysis for a given symbol.
+    Returns detailed Smart Money signal with probabilities and indicators.
+    """
+    try:
+        from app.services.smart_money import get_smart_money_signal as sm_signal
+        result = sm_signal(symbol.upper())
+        return result
+    except Exception as e:
+        return {
+            "success": False,
+            "symbol": symbol.upper(),
+            "error": str(e),
+            "signal": "HOLD"
+        }
+
+@app.get("/cache/stats")
+def get_cache_stats():
+    """
+    Get cache statistics and performance metrics.
+    """
+    try:
+        from app.services.cache import trading_cache
+        stats = trading_cache.get_stats()
+        return {
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/cache/clear")
+def clear_cache():
+    """
+    Clear all cached data.
+    """
+    try:
+        from app.services.cache import trading_cache
+        trading_cache.clear()
+        return {
+            "success": True,
+            "message": "Cache cleared successfully",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.on_event("startup")
 def launch_telegram_bot():
     """

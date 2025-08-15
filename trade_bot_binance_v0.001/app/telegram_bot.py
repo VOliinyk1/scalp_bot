@@ -18,7 +18,28 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(commands=["start", "help"])
 async def start_handler(message: types.Message):
-    await message.answer("Привіт! Надішли <b>/ai_signal &lt;SYMBOL&gt;</b>, напр. <code>/ai_signal ETHUSDT</code>")
+    help_text = """
+🤖 <b>Торговий бот - Команди</b>
+
+📈 <b>AI Сигнали</b>:
+<code>/ai_signal SYMBOL</code> - Повний AI аналіз
+Приклад: <code>/ai_signal BTCUSDT</code>
+
+🧠 <b>Smart Money</b>:
+<code>/smart_money SYMBOL</code> - Smart Money аналіз
+Приклад: <code>/smart_money ETHUSDT</code>
+
+🗂 <b>Історія</b>:
+<code>/last SYMBOL</code> - Останній збережений сигнал
+Приклад: <code>/last BTCUSDT</code>
+
+⚡ <b>Кеш</b>:
+<code>/cache_stats</code> - Статистика кешу
+<code>/cache_clear</code> - Очистити кеш
+
+💡 <b>Доступні пари</b>: BTCUSDT, ETHUSDT, BNBUSDT, ADAUSDT, DOTUSDT
+    """
+    await message.answer(help_text)
 
 @dp.message_handler(commands=["ai_signal"])
 async def ai_signal_handler(message: types.Message):
@@ -152,6 +173,86 @@ async def last_signal_handler(message: types.Message):
     except Exception as e:
         await message.answer(f"❌ Внутрішня помилка: <i>{e}</i>")
 
+@dp.message_handler(commands=["smart_money"])
+async def smart_money_handler(message: types.Message):
+    try:
+        parts = message.text.strip().split()
+        if len(parts) != 2:
+            return await message.answer("❌ Використання: <code>/smart_money &lt;SYMBOL&gt;</code>")
+
+        symbol = parts[1].upper()
+        resp = requests.get(f"{FASTAPI_URL}/smart_money/{symbol}", timeout=60)
+        if resp.status_code != 200:
+            return await message.answer("❌ Помилка сервера або неправильний символ")
+
+        data = resp.json()
+
+        if not data.get("success", True):
+            err = h(str(data.get("error", "Unknown error")))
+            return await message.answer(f"⚠️ Помилка Smart Money: <i>{err}</i>")
+
+        # Формуємо відповідь
+        reply = f"🧠 <b>Smart Money: {h(symbol)}</b>\n"
+        reply += f"Сигнал: <b>{h(data['signal'])}</b>\n"
+        reply += f"Впевненість: <code>{data['confidence']:.3f}</code>\n\n"
+        
+        reply += f"📊 <b>Ймовірності</b>:\n"
+        reply += f"BUY: <code>{data['p_buy']:.3f}</code>\n"
+        reply += f"SELL: <code>{data['p_sell']:.3f}</code>\n\n"
+        
+        reply += f"⚖️ <b>Індикатори</b>:\n"
+        reply += f"Дисбаланс ордербука: <code>{data['ob_imbalance']:.4f}</code>\n"
+        reply += f"Топ-трейдери: <code>{data['top_traders_ratio']:.3f}</code>\n"
+        reply += f"Сентимент новин: <code>{data['news_sentiment']:.3f}</code>\n"
+        reply += f"Таймфрейм: <code>{data['timeframe']}</code>"
+
+        await message.answer(reply)
+
+    except Exception as e:
+        await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
+
+
+@dp.message_handler(commands=["cache_stats"])
+async def cache_stats_handler(message: types.Message):
+    try:
+        resp = requests.get(f"{FASTAPI_URL}/cache/stats", timeout=10)
+        if resp.status_code != 200:
+            return await message.answer("❌ Помилка сервера")
+        
+        data = resp.json()
+        if not data.get("success"):
+            return await message.answer(f"❌ Помилка: {data.get('error', 'Unknown error')}")
+        
+        stats = data["stats"]
+        reply = f"⚡ <b>Статистика кешу</b>\n\n"
+        reply += f"📊 <b>Запити</b>:\n"
+        reply += f"Всього: <code>{stats['total_requests']}</code>\n"
+        reply += f"Попадання: <code>{stats['hits']}</code>\n"
+        reply += f"Промахи: <code>{stats['misses']}</code>\n"
+        reply += f"Ефективність: <code>{stats['hit_rate']:.1%}</code>\n\n"
+        reply += f"💾 <b>Розмір</b>: <code>{stats['size']}</code> записів\n"
+        reply += f"🗑️ <b>Видалено</b>: <code>{stats['evictions']}</code> записів"
+        
+        await message.answer(reply)
+        
+    except Exception as e:
+        await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
+
+@dp.message_handler(commands=["cache_clear"])
+async def cache_clear_handler(message: types.Message):
+    try:
+        resp = requests.post(f"{FASTAPI_URL}/cache/clear", timeout=10)
+        if resp.status_code != 200:
+            return await message.answer("❌ Помилка сервера")
+        
+        data = resp.json()
+        if not data.get("success"):
+            return await message.answer(f"❌ Помилка: {data.get('error', 'Unknown error')}")
+        
+        await message.answer("✅ Кеш успішно очищено!")
+        
+    except Exception as e:
+        await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
 
 # якщо потрібно запускати окремо:
 # if __name__ == "__main__":

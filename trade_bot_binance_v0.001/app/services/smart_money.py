@@ -15,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 
 from app.services.binance_api import BinanceAPI as binance_api
+from app.services.cache import trading_cache, CACHE_TTL
 
 
 # -------------------------------------------------------
@@ -117,13 +118,27 @@ def enrich_with_sm_signals(
     return df
 
 def build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    # Додаємо відсутні колонки
+    if "rsi_z" not in df.columns:
+        df["rsi_z"] = rsi_z(df["close"], 20)
+    if "ema" not in df.columns:
+        df["ema"] = ema(df["close"], 20)
+    if "macd" not in df.columns:
+        macd_df = macd(df["close"])
+        df["macd"] = macd_df["macd"]
+    if "adx" not in df.columns:
+        df["adx"] = adx(df, 14)
+    
     cols = [
         "ret1","ret5","ret20",
         "volat","rsi","rsi_z","ema","macd","adx","atr",
         "ob_imbalance","top_ratio","mom5","mom20",
         "volume","news_sentiment"
     ]
-    mat = df[cols].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    
+    # Перевіряємо які колонки є в DataFrame
+    available_cols = [col for col in cols if col in df.columns]
+    mat = df[available_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0)
     return mat
 
 # -------------------------------------------------------
@@ -147,7 +162,7 @@ class SMLRModel:
         self.model_path = model_path
         self.pipe: Pipeline = Pipeline([
             ("scaler", StandardScaler(with_mean=True, with_std=True)),
-            ("clf", LogisticRegression(max_iter=400, n_jobs=None, multi_class="ovr"))
+            ("clf", LogisticRegression(max_iter=400, n_jobs=None))
         ])
 
     def fit(self, X: pd.DataFrame, y_multi: pd.Series):
@@ -200,7 +215,14 @@ class BinanceData(MarketDataSource):
     """ Реалізація для Binance API, адаптуй під свій binance_api.py. """
 
     def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 500) -> pd.DataFrame:
-        df = 
+        try:
+            from app.services.binance_api import BinanceAPI
+            api = BinanceAPI()
+            return api.get_ohlcv(symbol, timeframe, limit)
+        except Exception as e:
+            print(f"Помилка отримання даних з Binance: {e}")
+            # Повертаємо dummy дані якщо API недоступне
+            return DummyData().get_ohlcv(symbol, timeframe, limit)
 # -------------------------------------------------------
 # Інтеграції з твоїми модулями (опційно, якщо є)
 # -------------------------------------------------------
@@ -211,8 +233,15 @@ def maybe_get_news_sentiment(symbol: str) -> Optional[float]:
     підключи його тут і поверни значення. Якщо немає — лишаємо None.
     """
     try:
-        from .new_sentiment import get_sentiment  # адаптуй під свою сигнатуру
-        return float(get_sentiment(symbol))
+        from app.services.new_sentiment import analyze_sentiment
+        # Використовуємо існуючу функцію analyze_sentiment
+        result = analyze_sentiment([], symbol, {})
+        if result.get("signal") == "BUY":
+            return 0.5
+        elif result.get("signal") == "SELL":
+            return -0.5
+        else:
+            return 0.0
     except Exception:
         return None
 
@@ -320,4 +349,105 @@ class SmartMoneyEngine:
             "top_traders_ratio": float(tr),
             "news_sentiment": float(news) if news is not None else 0.0,
             "ts": int(time.time() * 1000),
+        }
+
+# -------------------------------------------------------
+# Функції для інтеграції з Telegram ботом
+# -------------------------------------------------------
+
+def analyze_top_traders(symbol: str) -> dict:
+    """
+    Функція для інтеграції з ai_signals.py
+    Повертає результат Smart Money аналізу
+    """
+    # Перевіряємо кеш
+    cached_result = trading_cache.get("smart_money_analysis", symbol=symbol)
+    if cached_result is not None:
+        return cached_result
+    
+    try:
+        # Створюємо екземпляр двигуна з Binance даними
+        engine = SmartMoneyEngine(datasource=BinanceData())
+        
+        # Отримуємо сигнал
+        result = engine.latest_signal()
+        
+        # Конвертуємо в формат, очікуваний ai_signals.py
+        confidence = max(result["p_buy"], result["p_sell"])
+        
+        final_result = {
+            "symbol": symbol,
+            "signal": result["signal"],
+            "confidence": round(confidence, 3),
+            "source": "SmartMoney",
+            "timestamp": datetime.utcnow().isoformat(),
+            "details": {
+                "p_buy": result["p_buy"],
+                "p_sell": result["p_sell"],
+                "ob_imbalance": result["ob_imbalance"],
+                "top_traders_ratio": result["top_traders_ratio"],
+                "news_sentiment": result["news_sentiment"]
+            }
+        }
+        
+        # Зберігаємо в кеш
+        trading_cache.set(final_result, CACHE_TTL["smart_money_signal"], "smart_money_analysis", symbol=symbol)
+        
+        return final_result
+    except Exception as e:
+        print(f"Помилка Smart Money аналізу: {e}")
+        return {
+            "symbol": symbol,
+            "signal": "HOLD",
+            "confidence": 0.5,
+            "source": "SmartMoney(Error)",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
+
+def get_smart_money_signal(symbol: str) -> dict:
+    """
+    Функція для прямого виклику з Telegram бота
+    Повертає детальний Smart Money аналіз
+    """
+    # Перевіряємо кеш
+    cached_result = trading_cache.get("smart_money_signal", symbol=symbol)
+    if cached_result is not None:
+        return cached_result
+    
+    try:
+        # Створюємо екземпляр двигуна з Binance даними
+        engine = SmartMoneyEngine(datasource=BinanceData())
+        
+        # Отримуємо сигнал
+        result = engine.latest_signal()
+        
+        final_result = {
+            "success": True,
+            "symbol": symbol,
+            "signal": result["signal"],
+            "p_buy": result["p_buy"],
+            "p_sell": result["p_sell"],
+            "confidence": max(result["p_buy"], result["p_sell"]),
+            "ob_imbalance": result["ob_imbalance"],
+            "top_traders_ratio": result["top_traders_ratio"],
+            "news_sentiment": result["news_sentiment"],
+            "timeframe": result["timeframe"],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Зберігаємо в кеш
+        trading_cache.set(final_result, CACHE_TTL["smart_money_signal"], "smart_money_signal", symbol=symbol)
+        
+        return final_result
+    except Exception as e:
+        print(f"Помилка Smart Money аналізу: {e}")
+        return {
+            "success": False,
+            "symbol": symbol,
+            "error": str(e),
+            "signal": "HOLD",
+            "p_buy": 0.5,
+            "p_sell": 0.5,
+            "confidence": 0.5
         }

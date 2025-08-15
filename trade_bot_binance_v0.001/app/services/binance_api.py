@@ -1,10 +1,12 @@
 # app/binance_api.py
 
 import pandas as pd
+import numpy as np
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from ..config import BINANCE_API_KEY, BINANCE_API_SECRET
+from app.config import BINANCE_API_KEY, BINANCE_API_SECRET
+from app.services.cache import trading_cache, CACHE_TTL
 
 client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 
@@ -16,12 +18,24 @@ class BinanceAPI:
 
 
     def get_klines(self, symbol: str, interval: str = '5m', limit: int = 100):
+        # Перевіряємо кеш
+        cache_key = f"klines_{interval}"
+        cached_data = trading_cache.get(cache_key, symbol=symbol, interval=interval, limit=limit)
+        if cached_data is not None:
+            return cached_data
+        
         try:
-            return self.client.get_klines(
-            symbol=symbol.upper(),     # ключовий аргумент
-            interval=interval,         # ключовий аргумент
-            limit=limit                # ключовий аргумент
-        )
+            data = self.client.get_klines(
+                symbol=symbol.upper(),
+                interval=interval,
+                limit=limit
+            )
+            
+            # Зберігаємо в кеш
+            ttl = CACHE_TTL.get(f"ohlcv_{interval}", 300)  # За замовчуванням 5 хвилин
+            trading_cache.set(data, ttl, cache_key, symbol=symbol, interval=interval, limit=limit)
+            
+            return data
         except BinanceAPIException as e:
             print(f"[BINANCE ERROR] {e}")
             return []
@@ -32,8 +46,17 @@ class BinanceAPI:
 
     def get_order_book(self, symbol: str, limit: int = 5):
         """Отримати топ ордербуку"""
+        # Перевіряємо кеш
+        cached_data = trading_cache.get("orderbook", symbol=symbol, limit=limit)
+        if cached_data is not None:
+            return cached_data
+        
         try:
             depth = self.client.get_order_book(symbol=symbol, limit=limit)
+            
+            # Зберігаємо в кеш
+            trading_cache.set(depth, CACHE_TTL["orderbook"], "orderbook", symbol=symbol, limit=limit)
+            
             return depth
         except BinanceAPIException as e:
             print(f"❌ Error getting order book: {e}")
@@ -79,7 +102,7 @@ class BinanceAPI:
         ])
 
         df = df[["open_time","open","high","low","close","volume"]].copy()
-        df["ts"] = df["open_time"].astype(np.int64)  # Binance вже в мс
+        df["ts"] = df["open_time"].astype(int)  # Binance вже в мс
         for col in ["open","high","low","close","volume"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
