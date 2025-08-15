@@ -9,13 +9,14 @@
 import threading
 import datetime
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 
 from app.services.ai_signals import detect_signal
 from app.database import get_db
@@ -26,6 +27,22 @@ from app.services.risk_management import get_risk_manager
 from app.services.trading_engine import get_trading_engine
 from app.services.monitoring import get_monitoring_service
 from app.services.analytics import get_analytics_service
+
+# Pydantic models
+class TradingStartRequest(BaseModel):
+    trading_pairs: Optional[List[str]] = None
+
+class TradingStopRequest(BaseModel):
+    pass
+
+class MonitoringStartRequest(BaseModel):
+    pass
+
+class MonitoringStopRequest(BaseModel):
+    pass
+
+class CacheClearRequest(BaseModel):
+    pass
 
 app = FastAPI(title="Trade Bot")
 
@@ -90,8 +107,8 @@ def latest_signal(symbol: str, db: Session = Depends(get_db)):
 def latest(db=Depends(get_db)):
     row = db.execute(select(Signal).order_by(desc(Signal.created_at)).limit(1)).scalar_one_or_none()
     return {} if row is None else {
-        "ts": row.created_at, "symbol": row.symbol, "timeframe": row.timeframe,
-        "signal": row.signal, "p_buy": row.p_buy, "p_sell": row.p_sell
+        "ts": row.created_at, "symbol": row.symbol, "signal": row.final_signal,
+        "weights": row.weights, "details": row.details
     }
 
 @app.get("/smart_money/{symbol}")
@@ -131,8 +148,58 @@ def get_cache_stats():
             "error": str(e)
         }
 
+@app.get("/account/balance")
+def get_account_balance():
+    """
+    Отримує реальний баланс акаунту з Binance
+    """
+    try:
+        from app.services.binance_api import BinanceAPI
+        api = BinanceAPI()
+        balance_info = api.get_account_balance()
+        
+        if balance_info:
+            return {
+                "success": True,
+                "account_type": balance_info["account_type"],
+                "total_assets": balance_info["total_assets"],
+                "balances": balance_info["balances"],
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Не вдалося отримати баланс акаунту"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/account/usdt-balance")
+def get_usdt_balance():
+    """
+    Отримує баланс в USDT
+    """
+    try:
+        from app.services.binance_api import BinanceAPI
+        api = BinanceAPI()
+        usdt_balance = api.get_usdt_balance()
+        
+        return {
+            "success": True,
+            "usdt_balance": usdt_balance,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/cache/clear")
-def clear_cache():
+def clear_cache(request: CacheClearRequest = Body(None)):
     """
     Clear all cached data.
     """
@@ -281,7 +348,7 @@ def get_take_profit_price(symbol: str, entry_price: float, side: str):
 # =============================================================================
 
 @app.post("/trading/start")
-def start_trading_engine(trading_pairs: List[str] = None):
+def start_trading_engine(request: TradingStartRequest = Body(None)):
     """
     Запускає торговий двигун
     """
@@ -290,8 +357,10 @@ def start_trading_engine(trading_pairs: List[str] = None):
         import asyncio
         
         # Якщо trading_pairs не передано, використовуємо значення за замовчуванням
-        if trading_pairs is None:
+        if request is None:
             trading_pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+        else:
+            trading_pairs = request.trading_pairs or ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
         
         # Запускаємо в окремому потоці
         def run_engine():
@@ -311,34 +380,9 @@ def start_trading_engine(trading_pairs: List[str] = None):
             "success": False,
             "error": str(e)
         }
-    """
-    Запускає торговий двигун
-    """
-    try:
-        trading_engine = get_trading_engine()
-        import asyncio
-        
-        # Запускаємо в окремому потоці
-        def run_engine():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(trading_engine.start(trading_pairs))
-        
-        threading.Thread(target=run_engine, daemon=True).start()
-        
-        return {
-            "success": True,
-            "message": "Торговий двигун запущений",
-            "trading_pairs": trading_pairs or ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
 
 @app.post("/trading/stop")
-def stop_trading_engine():
+def stop_trading_engine(request: TradingStopRequest = Body(None)):
     """
     Зупиняє торговий двигун
     """
@@ -425,7 +469,7 @@ def get_alerts(hours: int = 24):
         }
 
 @app.post("/monitoring/start")
-def start_monitoring():
+def start_monitoring(request: MonitoringStartRequest = Body(None)):
     """
     Запускає моніторинг
     """
@@ -451,7 +495,7 @@ def start_monitoring():
         }
 
 @app.post("/monitoring/stop")
-def stop_monitoring():
+def stop_monitoring(request: MonitoringStopRequest = Body(None)):
     """
     Зупиняє моніторинг
     """

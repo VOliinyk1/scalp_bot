@@ -22,6 +22,7 @@ function startAutoRefresh() {
 async function loadDashboardData() {
     try {
         await Promise.all([
+            loadAccountBalance(),
             loadRiskMetrics(),
             loadTradingStatus(),
             loadMonitoringStatus(),
@@ -31,6 +32,89 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Помилка завантаження даних:', error);
         showNotification('Помилка завантаження даних', 'error');
+    }
+}
+
+// Завантаження балансу акаунту
+async function loadAccountBalance() {
+    try {
+        const response = await fetch(`${API_BASE}/account/balance`);
+        const data = await response.json();
+
+        if (data.success) {
+            // Оновлюємо основні метрики
+            document.getElementById('total-assets').textContent = data.total_assets;
+            document.getElementById('account-type').textContent = data.account_type;
+
+            // Отримуємо USDT баланс
+            const usdtResponse = await fetch(`${API_BASE}/account/usdt-balance`);
+            const usdtData = await usdtResponse.json();
+
+            if (usdtData.success) {
+                document.getElementById('usdt-balance').textContent =
+                    `$${usdtData.usdt_balance.toFixed(2)}`;
+            }
+
+            // Оновлюємо деталі балансу
+            updateBalanceDetails(data.balances);
+        } else {
+            console.error('Помилка завантаження балансу:', data.error);
+            document.getElementById('balance-details').innerHTML =
+                '<p class="text-danger">Помилка завантаження балансу</p>';
+        }
+    } catch (error) {
+        console.error('Помилка завантаження балансу акаунту:', error);
+        document.getElementById('balance-details').innerHTML =
+            '<p class="text-danger">Помилка з\'єднання</p>';
+    }
+}
+
+// Оновлення деталей балансу
+function updateBalanceDetails(balances) {
+    const container = document.getElementById('balance-details');
+
+    if (balances.length === 0) {
+        container.innerHTML = '<p class="text-muted">Немає активів</p>';
+        return;
+    }
+
+    const balanceHtml = `
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Актив</th>
+                        <th>Вільний</th>
+                        <th>Заблокований</th>
+                        <th>Всього</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${balances.slice(0, 10).map(balance => `
+                        <tr>
+                            <td><strong>${balance.asset}</strong></td>
+                            <td>${balance.free.toFixed(6)}</td>
+                            <td>${balance.locked.toFixed(6)}</td>
+                            <td><strong>${balance.total.toFixed(6)}</strong></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${balances.length > 10 ? `<small class="text-muted">Показано перші 10 активів з ${balances.length}</small>` : ''}
+    `;
+
+    container.innerHTML = balanceHtml;
+}
+
+// Ручне оновлення балансу
+async function refreshBalance() {
+    try {
+        await loadAccountBalance();
+        showNotification('Баланс оновлено', 'success');
+    } catch (error) {
+        console.error('Помилка оновлення балансу:', error);
+        showNotification('Помилка оновлення балансу', 'error');
     }
 }
 
@@ -384,5 +468,6 @@ window.addEventListener('online', () => {
 window.startTradingEngine = startTradingEngine;
 window.stopTradingEngine = stopTradingEngine;
 window.refreshData = refreshData;
+window.refreshBalance = refreshBalance;
 window.showRiskConfig = showRiskConfig;
 window.saveRiskConfig = saveRiskConfig;

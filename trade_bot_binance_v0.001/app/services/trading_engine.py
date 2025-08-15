@@ -176,13 +176,18 @@ class TradingEngine:
                 logger.error(f"Помилка в циклі управління ордерами: {e}")
                 await asyncio.sleep(30)
     
-    async def _process_trading_signal(self, signal: Signal):
+    async def _process_trading_signal(self, signal):
         """
         Обробляє торговий сигнал
         """
         try:
-            symbol = signal.symbol
-            side = signal.final_signal
+            # Підтримка як об'єкт Signal, так і словник
+            if hasattr(signal, 'symbol'):
+                symbol = signal.symbol
+                side = signal.final_signal
+            else:
+                symbol = signal.get('symbol')
+                side = signal.get('final_signal')
             
             # Отримуємо поточну ціну
             current_price = await self._get_current_price(symbol)
@@ -218,7 +223,8 @@ class TradingEngine:
                 await self._save_order_to_db(order, signal)
                 
         except Exception as e:
-            logger.error(f"Помилка обробки сигналу для {signal.symbol}: {e}")
+            symbol_name = signal.symbol if hasattr(signal, 'symbol') else signal.get('symbol', 'UNKNOWN')
+            logger.error(f"Помилка обробки сигналу для {symbol_name}: {e}")
     
     async def _execute_exit_signal(self, signal: Dict):
         """
