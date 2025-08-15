@@ -7,11 +7,15 @@
 # =============================================================================
 
 import threading
+import datetime
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
+from typing import List
 
 from app.services.ai_signals import detect_signal
 from app.database import get_db
@@ -21,6 +25,7 @@ from app.database import SessionLocal
 from app.services.risk_management import get_risk_manager
 from app.services.trading_engine import get_trading_engine
 from app.services.monitoring import get_monitoring_service
+from app.services.analytics import get_analytics_service
 
 app = FastAPI(title="Trade Bot")
 
@@ -33,13 +38,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 @app.get("/")
 def main():
     """
     Root endpoint.
+    Returns the dashboard HTML page.
+    """
+    return FileResponse("app/static/index.html")
+
+@app.get("/api/health")
+def health_check():
+    """
+    Health check endpoint.
     Returns a simple greeting message to verify the API is running.
     """
-    return {"message": "Hello, FastAPI!"}
+    return {"message": "Hello, FastAPI!", "status": "healthy"}
 
 @app.get("/signal/{symbol}")
 def get_signal(symbol: str):
@@ -166,7 +182,7 @@ def get_risk_metrics():
             "error": str(e)
         }
 
-@app.post("/risk/validate-trade")
+@app.get("/risk/validate-trade")
 def validate_trade(symbol: str, side: str, quantity: float, price: float, account_balance: float = 10000.0):
     """
     Валідує угоду на відповідність правилам ризик-менеджменту
@@ -266,6 +282,35 @@ def get_take_profit_price(symbol: str, entry_price: float, side: str):
 
 @app.post("/trading/start")
 def start_trading_engine(trading_pairs: List[str] = None):
+    """
+    Запускає торговий двигун
+    """
+    try:
+        trading_engine = get_trading_engine()
+        import asyncio
+        
+        # Якщо trading_pairs не передано, використовуємо значення за замовчуванням
+        if trading_pairs is None:
+            trading_pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+        
+        # Запускаємо в окремому потоці
+        def run_engine():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(trading_engine.start(trading_pairs))
+        
+        threading.Thread(target=run_engine, daemon=True).start()
+        
+        return {
+            "success": True,
+            "message": "Торговий двигун запущений",
+            "trading_pairs": trading_pairs
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
     """
     Запускає торговий двигун
     """
@@ -424,6 +469,96 @@ def stop_monitoring():
         return {
             "success": True,
             "message": "Моніторинг зупинений"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# =============================================================================
+# АНАЛІТИКА API
+# =============================================================================
+
+@app.get("/analytics/quick-stats")
+def get_quick_stats():
+    """
+    Отримує швидку статистику за останні 24 години
+    """
+    try:
+        analytics_service = get_analytics_service()
+        stats = analytics_service.get_quick_stats()
+        
+        return {
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/analytics/performance-report")
+def get_performance_report(days: int = 30):
+    """
+    Генерує звіт про продуктивність за вказаний період
+    """
+    try:
+        analytics_service = get_analytics_service()
+        report = analytics_service.generate_performance_report(days)
+        
+        return {
+            "success": True,
+            "report": {
+                "period": report.period,
+                "start_date": report.start_date.isoformat(),
+                "end_date": report.end_date.isoformat(),
+                "metrics": {
+                    "total_trades": report.metrics.total_trades,
+                    "winning_trades": report.metrics.winning_trades,
+                    "losing_trades": report.metrics.losing_trades,
+                    "win_rate": report.metrics.win_rate,
+                    "total_profit": report.metrics.total_profit,
+                    "total_loss": report.metrics.total_loss,
+                    "net_profit": report.metrics.net_profit,
+                    "avg_win": report.metrics.avg_win,
+                    "avg_loss": report.metrics.avg_loss,
+                    "profit_factor": report.metrics.profit_factor,
+                    "max_drawdown": report.metrics.max_drawdown,
+                    "sharpe_ratio": report.metrics.sharpe_ratio,
+                    "avg_trade_duration": report.metrics.avg_trade_duration,
+                    "best_trade": report.metrics.best_trade,
+                    "worst_trade": report.metrics.worst_trade
+                },
+                "top_symbols": report.top_symbols,
+                "daily_returns": report.daily_returns,
+                "risk_metrics": report.risk_metrics,
+                "recommendations": report.recommendations
+            },
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/analytics/export-report")
+def export_performance_report(days: int = 30):
+    """
+    Експортує звіт про продуктивність у JSON формат
+    """
+    try:
+        analytics_service = get_analytics_service()
+        report = analytics_service.generate_performance_report(days)
+        json_report = analytics_service.export_report_to_json(report)
+        
+        return {
+            "success": True,
+            "report_json": json_report,
+            "timestamp": datetime.datetime.utcnow().isoformat()
         }
     except Exception as e:
         return {

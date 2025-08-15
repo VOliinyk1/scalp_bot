@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Торговий Бот - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .metric-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-running {
+            background-color: #27ae60;
+        }
+
+        .status-stopped {
+            background-color: #e74c3c;
+        }
+
+        .status-warning {
+            background-color: #f39c12;
+        }
+
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        .alert-item {
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 5px;
+        }
+
+        .alert-critical {
+            border-left-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+
+        .alert-warning {
+            border-left-color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+
+        .alert-success {
+            border-left-color: #27ae60;
+            background: rgba(39, 174, 96, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="dashboard-card p-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h1 class="mb-0">
+                            <i class="fas fa-robot text-primary"></i>
+                            Торговий Бот Dashboard
+                        </h1>
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator status-running" id="system-status"></span>
+                            <span class="me-3" id="system-status-text">Система активна</span>
+                            <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
+                                <i class="fas fa-sync-alt"></i> Оновити
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="dashboard-card p-4 text-center">
+                    <div class="metric-value text-success" id="total-exposure">$0.00</div>
+                    <div class="metric-label">Загальна Експозиція</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="dashboard-card p-4 text-center">
+                    <div class="metric-value text-info" id="daily-pnl">$0.00</div>
+                    <div class="metric-label">Денний P&L</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="dashboard-card p-4 text-center">
+                    <div class="metric-value text-warning" id="win-rate">0%</div>
+                    <div class="metric-label">Відсоток Виграшів</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="dashboard-card p-4 text-center">
+                    <div class="metric-value text-danger" id="max-drawdown">0%</div>
+                    <div class="metric-label">Макс. Просадка</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Engine Control -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-cogs text-primary"></i> Торговий Двигун</h5>
+                    <div class="mb-3">
+                        <span class="status-indicator" id="engine-status"></span>
+                        <span id="engine-status-text">Зупинений</span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Торгові пари:</label>
+                        <input type="text" class="form-control" id="trading-pairs" value="BTCUSDT,ETHUSDT,BNBUSDT"
+                            placeholder="Введіть пари через кому">
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success" onclick="startTradingEngine()">
+                            <i class="fas fa-play"></i> Запустити
+                        </button>
+                        <button class="btn btn-danger" onclick="stopTradingEngine()">
+                            <i class="fas fa-stop"></i> Зупинити
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-shield-alt text-primary"></i> Ризик-Менеджмент</h5>
+                    <div class="mb-3">
+                        <span class="status-indicator" id="risk-status"></span>
+                        <span id="risk-status-text">Низький ризик</span>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Stop Loss:</small>
+                            <div id="stop-loss-percent">5%</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Take Profit:</small>
+                            <div id="take-profit-percent">10%</div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary btn-sm" onclick="showRiskConfig()">
+                            <i class="fas fa-cog"></i> Налаштування
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Positions & Orders -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-chart-line text-primary"></i> Активні Позиції</h5>
+                    <div id="active-positions">
+                        <p class="text-muted">Немає активних позицій</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-list text-primary"></i> Активні Ордери</h5>
+                    <div id="active-orders">
+                        <p class="text-muted">Немає активних ордерів</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Signals & Alerts -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-signal text-primary"></i> Останні Сигнали</h5>
+                    <div id="recent-signals">
+                        <p class="text-muted">Завантаження...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-bell text-primary"></i> Сповіщення</h5>
+                    <div id="alerts">
+                        <p class="text-muted">Завантаження...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Chart -->
+        <div class="row">
+            <div class="col-12">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-chart-area text-primary"></i> Продуктивність</h5>
+                    <div class="chart-container">
+                        <canvas id="performance-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Configuration Modal -->
+    <div class="modal fade" id="riskConfigModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Налаштування Ризик-Менеджменту</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Stop Loss (%)</label>
+                                <input type="number" class="form-control" id="stop-loss-input" value="5" min="1"
+                                    max="20">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Take Profit (%)</label>
+                                <input type="number" class="form-control" id="take-profit-input" value="10" min="1"
+                                    max="50">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Макс. Розмір Позиції (USDT)</label>
+                                <input type="number" class="form-control" id="max-position-input" value="1000"
+                                    min="100">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Макс. Денний Збиток (USDT)</label>
+                                <input type="number" class="form-control" id="max-daily-loss-input" value="200"
+                                    min="50">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" onclick="saveRiskConfig()">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+
+</html>
