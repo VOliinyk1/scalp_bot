@@ -131,14 +131,7 @@ async def ai_signal_handler(message: types.Message):
                      f"{sm_sig} (conf=<code>{sm_conf if sm_conf is not None else '-'}</code>) · " \
                      f"src=<code>{src}</code>\n"
 
-        # gpt sentiment
-        if gpt:
-            gsig = h(str(gpt.get("signal", "-")))
-            gpt_msg = h(str(gpt.get("raw", "-")))
-            reply += f"🧠 <b>GPT</b>: {gsig}"
-            reply += f"\n{gpt_msg}"
-            if gpt.get("error"):
-                reply += f"\n⚠️ <i>{h(str(gpt['error']))}</i>"
+        # GPT сентимент вимкнено
 
         await message.answer(reply)
 

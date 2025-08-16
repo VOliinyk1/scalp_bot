@@ -40,11 +40,9 @@ except Exception:
     def analyze_top_traders(symbol: str) -> dict:
         return {"symbol": symbol, "signal": "HOLD", "confidence": 0.5, "source": "SmartMoney(mock)", "timestamp": datetime.datetime.utcnow().isoformat()}
 
-try:
-    from app.services.new_sentiment import analyze_sentiment  # type: ignore
-except Exception:
-    def analyze_sentiment(news: List[str], symbol: str) -> dict:
-        return {"signal": "HOLD", "error": "news_sentiment module unavailable"}
+# GPT сентимент тимчасово вимкнено
+def analyze_sentiment(news: List[str], symbol: str, techs: dict | None = None) -> dict:
+    return {"signal": "HOLD", "disabled": True}
 
 client = BinanceAPI()
 
@@ -233,11 +231,13 @@ def load_weights() -> Dict[str, float]:
     if raw:
         try:
             w = json.loads(raw)
-            return {"tech": float(w.get("tech", 0.5)), "smart": float(w.get("smart", 0.25)), "gpt": float(w.get("gpt", 0.25))}
+            # GPT вагу форсуємо в 0, поки вимкнено використання GPT
+            return {"tech": float(w.get("tech", 0.5)), "smart": float(w.get("smart", 0.25)), "gpt": 0.0}
         except Exception:
             pass
     # fallback defaults
-    return {"tech": 0.5, "smart": 0.25, "gpt": 0.25}
+    # GPT вагу форсуємо в 0
+    return {"tech": 0.5, "smart": 0.5, "gpt": 0.0}
 
 # =========================
 # Main aggregation
@@ -288,7 +288,8 @@ def detect_signal(symbol: str, techs=None) -> dict:
             'adx': regime.get("adx")
         }
         smart = analyze_top_traders(symbol)
-        gpt = analyze_sentiment([], symbol=symbol, techs=techs)
+        # GPT сентимент вимкнено
+        gpt = {"signal": "HOLD", "disabled": True}
 
         # Adaptive weights
         w = load_weights()
@@ -296,7 +297,7 @@ def detect_signal(symbol: str, techs=None) -> dict:
 
         votes[tech_signal] += w["tech"]
         votes[smart.get("signal", "HOLD")] += w["smart"]
-        votes[gpt.get("signal", "HOLD")] += w["gpt"]
+        # GPT голоси не враховуємо, вага 0
 
         final_signal = max(votes, key=votes.get)
 
@@ -316,7 +317,6 @@ def detect_signal(symbol: str, techs=None) -> dict:
             },
             "regime": regime,
             "smart_money": smart,
-            "gpt_sentiment": gpt,
         }
         
         db = SessionLocal()

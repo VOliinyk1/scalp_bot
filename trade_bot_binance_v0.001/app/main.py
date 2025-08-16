@@ -261,7 +261,7 @@ def get_bot_analysis():
     try:
         from app.services.ai_signals import detect_signal
         from app.services.smart_money import analyze_top_traders
-        from app.services.new_sentiment import analyze_sentiment
+        # GPT сентимент тимчасово вимкнено
         from app.services.risk_management import get_risk_manager
         
         # Отримуємо аналіз для BTCUSDT як приклад
@@ -273,8 +273,7 @@ def get_bot_analysis():
         # Smart Money аналіз
         smart_money = analyze_top_traders(symbol)
         
-        # GPT сентимент
-        gpt_sentiment = analyze_sentiment([], symbol=symbol)
+        # GPT сентимент вимкнено
         
         # Ризик-менеджмент
         risk_manager = get_risk_manager()
@@ -285,7 +284,7 @@ def get_bot_analysis():
             "analysis": {
                 "technical": tech_analysis,
                 "smart_money": smart_money,
-                "gpt_sentiment": gpt_sentiment,
+                # "gpt_sentiment": gpt_sentiment,
                 "risk_management": {
                     "total_exposure": risk_metrics.total_exposure,
                     "daily_pnl": risk_metrics.daily_pnl,
@@ -418,7 +417,7 @@ def get_ml_features():
                 {"name": "Bollinger Bands", "importance": 0.167},
                 {"name": "Volume SMA", "importance": 0.134},
                 {"name": "Smart Money Flow", "importance": 0.123},
-                {"name": "GPT Sentiment", "importance": 0.089}
+                # GPT Sentiment вимкнено
             ],
             "timestamp": datetime.datetime.utcnow().isoformat()
         }

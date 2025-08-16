@@ -480,7 +480,7 @@ function getDemoFeatures() {
         { name: 'Bollinger Bands', importance: 0.167 },
         { name: 'Volume SMA', importance: 0.134 },
         { name: 'Smart Money Flow', importance: 0.123 },
-        { name: 'GPT Sentiment', importance: 0.089 }
+        // GPT Sentiment вимкнено
     ];
 }
 
