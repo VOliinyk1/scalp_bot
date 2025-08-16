@@ -242,6 +242,8 @@ class TradingEngine:
                 
                 # Оновлюємо позицію в менеджері ризиків
                 self.risk_manager.update_position(symbol, side, quantity, current_price, order["orderId"])
+                # Фіксуємо спробу/факт розміщення ордера, щоб затримати наступні
+                self.risk_manager.record_order_attempt(symbol)
                 
                 # Зберігаємо ордер в базі даних
                 await self._save_order_to_db(order, signal)

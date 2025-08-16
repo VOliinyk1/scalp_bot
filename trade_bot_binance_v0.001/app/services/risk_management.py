@@ -88,7 +88,7 @@ class RiskConfig:
     max_volatility_threshold: float = 0.05  # Максимальна волатильність (5%)
     
     # Ліквідність
-    min_liquidity_usdt: float = 1000000.0  # Мінімальна ліквідність в USDT (fallback)
+    min_liquidity_usdt: float = 50000.0  # Мінімальна ліквідність в USDT (fallback)
     min_liquidity_to_position_ratio: float = 10.0  # k: вимога ліквідності як k * розмір позиції
 
 class RiskManager:
@@ -391,6 +391,10 @@ class RiskManager:
         
         time_since_last = datetime.utcnow() - self.last_trade_time[symbol]
         return time_since_last.total_seconds() >= self.config.min_time_between_trades_minutes * 60
+
+    def record_order_attempt(self, symbol: str) -> None:
+        """Фіксує час спроби розміщення ордера, щоб обмежувати частоту ордерів."""
+        self.last_trade_time[symbol] = datetime.utcnow()
     
     def _calculate_total_exposure(self) -> float:
         """

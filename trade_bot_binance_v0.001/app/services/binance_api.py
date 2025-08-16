@@ -8,6 +8,7 @@ from binance.client import Client
 from binance.exceptions import BinanceAPIException
 from app.config import BINANCE_API_KEY, BINANCE_API_SECRET
 from app.services.cache import trading_cache, CACHE_TTL
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 
 client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 
@@ -16,6 +17,95 @@ client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
 class BinanceAPI:
     def __init__(self):
         self.client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+
+    # ----------------------
+    # Helpers for filters
+    # ----------------------
+    def _get_symbol_info(self, symbol: str) -> dict | None:
+        cache_key = "symbol_info"
+        cached = trading_cache.get(cache_key, symbol=symbol)
+        if cached is not None:
+            return cached
+        try:
+            info = self.client.get_symbol_info(symbol)
+            if info:
+                trading_cache.set(info, 3600, cache_key, symbol=symbol)
+            return info
+        except Exception:
+            return None
+
+    def _apply_filters(self, symbol: str, quantity: float, price: float) -> tuple[str, str]:
+        info = self._get_symbol_info(symbol)
+        if not info:
+            # Fallback: return original values as strings
+            return str(quantity), str(price)
+
+        step_size = None
+        min_qty = None
+        tick_size = None
+        min_price = None
+        min_notional = None
+
+        for f in info.get("filters", []):
+            ftype = f.get("filterType")
+            if ftype == "LOT_SIZE":
+                step_size = f.get("stepSize")
+                min_qty = f.get("minQty")
+            elif ftype == "PRICE_FILTER":
+                tick_size = f.get("tickSize")
+                min_price = f.get("minPrice")
+            elif ftype == "MIN_NOTIONAL":
+                min_notional = f.get("minNotional")
+
+        q = Decimal(str(quantity))
+        p = Decimal(str(price))
+
+        def round_to_step(value: Decimal, step: str, rounding=ROUND_DOWN) -> Decimal:
+            step_dec = Decimal(str(step))
+            if step_dec <= 0:
+                return value
+            n = (value / step_dec).to_integral_value(rounding=rounding)
+            return n * step_dec
+
+        if tick_size:
+            p = round_to_step(p, tick_size, rounding=ROUND_DOWN)
+        if min_price:
+            min_p = Decimal(str(min_price))
+            if p < min_p:
+                p = min_p
+
+        if step_size:
+            q = round_to_step(q, step_size, rounding=ROUND_DOWN)
+        if min_qty:
+            min_q = Decimal(str(min_qty))
+            if q < min_q:
+                q = min_q
+
+        if min_notional:
+            mn = Decimal(str(min_notional))
+            if p * q < mn and p > 0:
+                # increase quantity to satisfy notional, then round UP to step
+                req_q = (mn / p)
+                if step_size:
+                    q = round_to_step(req_q, step_size, rounding=ROUND_UP)
+                else:
+                    q = req_q
+
+        # Ensure non-zero positive
+        if q <= 0:
+            if min_qty:
+                q = Decimal(str(min_qty))
+            else:
+                q = Decimal("0.00000001")
+
+        q_str = format(q, 'f')
+        p_str = format(p, 'f')
+        # Avoid scientific notation and ensure no trailing zeros beyond step; Binance accepts trimmed
+        if '.' in q_str:
+            q_str = q_str.rstrip('0').rstrip('.')
+        if '.' in p_str:
+            p_str = p_str.rstrip('0').rstrip('.')
+        return q_str, p_str
 
 
     def get_klines(self, symbol: str, interval: str = '5m', limit: int = 100):
@@ -66,17 +156,24 @@ class BinanceAPI:
     def place_limit_order(self, symbol: str, side: str, quantity: float, price: float):
         """Виставити лімітний ордер (BUY/SELL)"""
         try:
+            adj_qty, adj_price = self._apply_filters(symbol, quantity, price)
+            # Debug: print adjusted params
+            print(f"🔧 Placing order adjusted: {symbol} {side} qty={adj_qty} price={adj_price}")
             order = self.client.create_order(
                 symbol=symbol,
                 side=side,
                 type='LIMIT',
                 timeInForce='GTC',
-                quantity=quantity,
-                price=str(price)
+                quantity=adj_qty,
+                price=str(adj_price)
             )
             return order
         except BinanceAPIException as e:
-            print(f"❌ Error placing order: {e}")
+            try:
+                info = self._get_symbol_info(symbol)
+                print(f"❌ Error placing order: {e}. Filters: {info.get('filters') if info else 'N/A'}")
+            except Exception:
+                print(f"❌ Error placing order: {e}")
             return None
 
     def cancel_order(self, symbol: str, order_id: str):
