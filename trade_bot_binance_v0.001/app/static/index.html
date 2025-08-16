@@ -87,6 +87,65 @@
             border-left-color: #27ae60;
             background: rgba(39, 174, 96, 0.1);
         }
+
+        /* Стилі для логів */
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .log-time {
+            color: #666;
+            font-weight: bold;
+        }
+
+        .log-level {
+            font-weight: bold;
+            margin: 0 5px;
+        }
+
+        .log-info {
+            background: rgba(52, 152, 219, 0.1);
+            border-left: 3px solid #3498db;
+        }
+
+        .log-warning {
+            background: rgba(243, 156, 18, 0.1);
+            border-left: 3px solid #f39c12;
+        }
+
+        .log-error {
+            background: rgba(231, 76, 60, 0.1);
+            border-left: 3px solid #e74c3c;
+        }
+
+        .log-success {
+            background: rgba(39, 174, 96, 0.1);
+            border-left: 3px solid #27ae60;
+        }
+
+        .log-trade {
+            background: rgba(155, 89, 182, 0.1);
+            border-left: 3px solid #9b59b6;
+        }
+
+        .log-signal {
+            background: rgba(26, 188, 156, 0.1);
+            border-left: 3px solid #1abc9c;
+        }
+
+        .log-risk {
+            background: rgba(230, 126, 34, 0.1);
+            border-left: 3px solid #e67e22;
+        }
+
+        .log-analysis {
+            background: rgba(52, 73, 94, 0.1);
+            border-left: 3px solid #34495e;
+        }
     </style>
 </head>
 
@@ -119,7 +178,7 @@
                 <div class="dashboard-card p-4">
                     <h5><i class="fas fa-wallet text-primary"></i> Баланс Акаунту</h5>
                     <div class="row">
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-2 mb-3">
                             <div class="text-center">
                                 <div class="metric-value text-primary" id="usdt-balance">$0.00</div>
                                 <div class="metric-label">USDT Баланс</div>
@@ -127,11 +186,17 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="text-center">
-                                <div class="metric-value text-success" id="total-assets">0</div>
+                                <div class="metric-value text-success" id="portfolio-value">$0.00</div>
+                                <div class="metric-label">Загальна Вартість</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <div class="text-center">
+                                <div class="metric-value text-warning" id="total-assets">0</div>
                                 <div class="metric-label">Всього Активів</div>
                             </div>
                         </div>
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-2 mb-3">
                             <div class="text-center">
                                 <div class="metric-value text-info" id="account-type">SPOT</div>
                                 <div class="metric-label">Тип Акаунту</div>
@@ -194,6 +259,16 @@
                         <input type="text" class="form-control" id="trading-pairs" value="BTCUSDT,ETHUSDT,BNBUSDT"
                             placeholder="Введіть пари через кому">
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Часовий інтервал:</label>
+                        <select class="form-select" id="timeframe-select">
+                            <option value="1m">1m (Скальпінг)</option>
+                            <option value="5m" selected>5m (Короткострокова)</option>
+                            <option value="15m">15m (Середньострокова)</option>
+                            <option value="1h">1h (Довгострокова)</option>
+                            <option value="4h">4h (Позиційна)</option>
+                        </select>
+                    </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-success" onclick="startTradingEngine()">
                             <i class="fas fa-play"></i> Запустити
@@ -225,6 +300,98 @@
                         <button class="btn btn-outline-primary btn-sm" onclick="showRiskConfig()">
                             <i class="fas fa-cog"></i> Налаштування
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bot Settings & Frequency -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-clock text-primary"></i> Частота Роботи Бота</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Цикл</th>
+                                    <th>Частота</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Моніторинг цін</td>
+                                    <td>5 сек</td>
+                                    <td><span class="badge bg-success" id="price-monitoring-status">Активний</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Обробка сигналів</td>
+                                    <td>30 сек</td>
+                                    <td><span class="badge bg-success" id="signal-processing-status">Активний</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Моніторинг ризиків</td>
+                                    <td>60 сек</td>
+                                    <td><span class="badge bg-success" id="risk-monitoring-status">Активний</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Управління ордерами</td>
+                                    <td>30 сек</td>
+                                    <td><span class="badge bg-success" id="order-management-status">Активний</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-chart-line text-primary"></i> Налаштування Часових Інтервалів</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Інтервал</th>
+                                    <th>Мін. час між угодами</th>
+                                    <th>Stop Loss</th>
+                                    <th>Take Profit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>1m</strong></td>
+                                    <td>5 хв</td>
+                                    <td>2%</td>
+                                    <td>3%</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>5m</strong></td>
+                                    <td>15 хв</td>
+                                    <td>3%</td>
+                                    <td>6%</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>15m</strong></td>
+                                    <td>30 хв</td>
+                                    <td>4%</td>
+                                    <td>8%</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>1h</strong></td>
+                                    <td>60 хв</td>
+                                    <td>5%</td>
+                                    <td>10%</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>4h</strong></td>
+                                    <td>120 хв</td>
+                                    <td>7%</td>
+                                    <td>15%</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -265,6 +432,50 @@
                     <h5><i class="fas fa-bell text-primary"></i> Сповіщення</h5>
                     <div id="alerts">
                         <p class="text-muted">Завантаження...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bot Logs & Analysis -->
+        <div class="row mb-4">
+            <div class="col-md-8 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-terminal text-primary"></i> Логи Бота</h5>
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearBotLogs()">
+                            <i class="fas fa-trash"></i> Очистити
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="refreshBotLogs()">
+                            <i class="fas fa-sync-alt"></i> Оновити
+                        </button>
+                    </div>
+                    <div id="bot-logs"
+                        style="height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+                        <p class="text-muted">Логи бота будуть з'являтися тут...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="dashboard-card p-4">
+                    <h5><i class="fas fa-chart-pie text-primary"></i> Аналіз Сигналів</h5>
+                    <div id="signal-analysis">
+                        <div class="mb-3">
+                            <small class="text-muted">Технічний аналіз:</small>
+                            <div id="tech-analysis-status">Завантаження...</div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Smart Money:</small>
+                            <div id="smart-money-status">Завантаження...</div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">GPT Сентимент:</small>
+                            <div id="gpt-sentiment-status">Завантаження...</div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Ризик-менеджмент:</small>
+                            <div id="risk-management-status">Завантаження...</div>
+                        </div>
                     </div>
                 </div>
             </div>

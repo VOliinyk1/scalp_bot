@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from enum import Enum
+from app.services.logging_service import bot_logger
 import pandas as pd
 import numpy as np
 from sqlalchemy.orm import Session
@@ -192,7 +193,7 @@ class RiskManager:
         self.positions[symbol].append(position)
         self.last_trade_time[symbol] = datetime.utcnow()
         
-        logger.info(f"Позиція оновлена: {symbol} {side} {quantity} @ {price}")
+        bot_logger.trade(f"Позиція оновлена", symbol, side, price)
     
     def calculate_stop_loss_price(self, symbol: str, entry_price: float, 
                                 side: str) -> float:
@@ -292,7 +293,7 @@ class RiskManager:
         daily_pnl = self._calculate_daily_loss()
         volatility = self._calculate_portfolio_volatility()
         
-        return RiskMetrics(
+        metrics = RiskMetrics(
             total_exposure=total_exposure,
             max_drawdown=max_drawdown,
             win_rate=win_rate,
@@ -303,6 +304,21 @@ class RiskManager:
             daily_pnl=daily_pnl,
             volatility=volatility
         )
+        
+        # Логуємо метрики ризику кожні 10 викликів
+        if hasattr(self, '_metrics_log_counter'):
+            self._metrics_log_counter += 1
+        else:
+            self._metrics_log_counter = 0
+        
+        if self._metrics_log_counter % 10 == 0:
+            bot_logger.risk(
+                f"Ризик-менеджмент: Експозиція: {total_exposure:.2f} USDT, P&L: {daily_pnl:.2f} USDT, Win Rate: {win_rate:.1%}",
+                "MEDIUM",
+                total_exposure
+            )
+        
+        return metrics
     
     def _get_symbol_volatility(self, symbol: str) -> float:
         """

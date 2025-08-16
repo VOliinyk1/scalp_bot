@@ -27,7 +27,9 @@ async function loadDashboardData() {
             loadTradingStatus(),
             loadMonitoringStatus(),
             loadRecentSignals(),
-            loadAlerts()
+            loadAlerts(),
+            loadBotLogs(),
+            loadBotAnalysis()
         ]);
     } catch (error) {
         console.error('Помилка завантаження даних:', error);
@@ -53,6 +55,14 @@ async function loadAccountBalance() {
             if (usdtData.success) {
                 document.getElementById('usdt-balance').textContent =
                     `$${usdtData.usdt_balance.toFixed(2)}`;
+            }
+
+            // Оновлюємо загальну вартість портфеля
+            if (data.total_portfolio_value) {
+                const portfolioValueElement = document.getElementById('portfolio-value');
+                if (portfolioValueElement) {
+                    portfolioValueElement.textContent = `$${data.total_portfolio_value.toFixed(2)}`;
+                }
             }
 
             // Оновлюємо деталі балансу
@@ -87,6 +97,8 @@ function updateBalanceDetails(balances) {
                         <th>Вільний</th>
                         <th>Заблокований</th>
                         <th>Всього</th>
+                        <th>Ціна (USDT)</th>
+                        <th>Вартість (USDT)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -96,6 +108,8 @@ function updateBalanceDetails(balances) {
                             <td>${balance.free.toFixed(6)}</td>
                             <td>${balance.locked.toFixed(6)}</td>
                             <td><strong>${balance.total.toFixed(6)}</strong></td>
+                            <td>$${balance.price_usdt ? balance.price_usdt.toFixed(4) : '0.0000'}</td>
+                            <td><strong class="text-primary">$${balance.usdt_value.toFixed(2)}</strong></td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -464,6 +478,146 @@ window.addEventListener('online', () => {
     loadDashboardData();
 });
 
+// Завантаження логів бота
+async function loadBotLogs() {
+    try {
+        const response = await fetch(`${API_BASE}/bot/logs?limit=20`);
+        const data = await response.json();
+
+        if (data.success) {
+            updateBotLogs(data.logs);
+        }
+    } catch (error) {
+        console.error('Помилка завантаження логів:', error);
+    }
+}
+
+// Оновлення логів бота
+function updateBotLogs(logs) {
+    const container = document.getElementById('bot-logs');
+
+    if (logs.length === 0) {
+        container.innerHTML = '<p class="text-muted">Немає логів</p>';
+        return;
+    }
+
+    const logsHtml = logs.map(log => {
+        const timestamp = new Date(log.timestamp).toLocaleTimeString();
+        const levelClass = getLevelClass(log.level);
+        return `
+            <div class="log-entry ${levelClass}">
+                <span class="log-time">[${timestamp}]</span>
+                <span class="log-level">${log.level}</span>
+                <span class="log-message">${log.message}</span>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = logsHtml;
+
+    // Прокручуємо до останнього логу
+    container.scrollTop = container.scrollHeight;
+}
+
+// Отримання CSS класу для рівня логу
+function getLevelClass(level) {
+    const levelMap = {
+        'INFO': 'log-info',
+        'WARNING': 'log-warning',
+        'ERROR': 'log-error',
+        'SUCCESS': 'log-success',
+        'TRADE': 'log-trade',
+        'SIGNAL': 'log-signal',
+        'RISK': 'log-risk',
+        'ANALYSIS': 'log-analysis'
+    };
+    return levelMap[level] || 'log-info';
+}
+
+// Завантаження аналізу бота
+async function loadBotAnalysis() {
+    try {
+        const response = await fetch(`${API_BASE}/bot/analysis`);
+        const data = await response.json();
+
+        if (data.success) {
+            updateBotAnalysis(data.analysis);
+        }
+    } catch (error) {
+        console.error('Помилка завантаження аналізу:', error);
+    }
+}
+
+// Оновлення аналізу бота
+function updateBotAnalysis(analysis) {
+    // Технічний аналіз
+    const techStatus = document.getElementById('tech-analysis-status');
+    if (analysis.technical && analysis.technical.final_signal) {
+        techStatus.innerHTML = `
+            <span class="badge bg-${getSignalColor(analysis.technical.final_signal)}">
+                ${analysis.technical.final_signal}
+            </span>
+            <small class="text-muted">(${analysis.technical.weights?.BUY?.toFixed(2) || 0})</small>
+        `;
+    }
+
+    // Smart Money
+    const smartStatus = document.getElementById('smart-money-status');
+    if (analysis.smart_money && analysis.smart_money.signal) {
+        smartStatus.innerHTML = `
+            <span class="badge bg-${getSignalColor(analysis.smart_money.signal)}">
+                ${analysis.smart_money.signal}
+            </span>
+            <small class="text-muted">(${analysis.smart_money.p_buy?.toFixed(2) || 0})</small>
+        `;
+    }
+
+    // GPT Сентимент
+    const gptStatus = document.getElementById('gpt-sentiment-status');
+    if (analysis.gpt_sentiment && analysis.gpt_sentiment.signal) {
+        gptStatus.innerHTML = `
+            <span class="badge bg-${getSignalColor(analysis.gpt_sentiment.signal)}">
+                ${analysis.gpt_sentiment.signal}
+            </span>
+        `;
+    }
+
+    // Ризик-менеджмент
+    const riskStatus = document.getElementById('risk-management-status');
+    if (analysis.risk_management) {
+        const risk = analysis.risk_management;
+        riskStatus.innerHTML = `
+            <div class="small">
+                <div>Експозиція: $${risk.total_exposure?.toFixed(2) || 0}</div>
+                <div>P&L: $${risk.daily_pnl?.toFixed(2) || 0}</div>
+                <div>Win Rate: ${(risk.win_rate * 100)?.toFixed(1) || 0}%</div>
+            </div>
+        `;
+    }
+}
+
+// Отримання кольору для сигналу
+function getSignalColor(signal) {
+    switch (signal) {
+        case 'BUY': return 'success';
+        case 'SELL': return 'danger';
+        case 'HOLD': return 'secondary';
+        default: return 'secondary';
+    }
+}
+
+// Очищення логів бота
+function clearBotLogs() {
+    document.getElementById('bot-logs').innerHTML = '<p class="text-muted">Логи очищені</p>';
+    showNotification('Логи очищені', 'info');
+}
+
+// Оновлення логів бота
+function refreshBotLogs() {
+    loadBotLogs();
+    showNotification('Логи оновлено', 'info');
+}
+
 // Експорт функцій для глобального використання
 window.startTradingEngine = startTradingEngine;
 window.stopTradingEngine = stopTradingEngine;
@@ -471,3 +625,5 @@ window.refreshData = refreshData;
 window.refreshBalance = refreshBalance;
 window.showRiskConfig = showRiskConfig;
 window.saveRiskConfig = saveRiskConfig;
+window.clearBotLogs = clearBotLogs;
+window.refreshBotLogs = refreshBotLogs;

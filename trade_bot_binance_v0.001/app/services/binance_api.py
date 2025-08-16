@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import datetime
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -110,10 +111,28 @@ class BinanceAPI:
         return df
 
     def get_account_info(self):
-        """Отримує інформацію про акаунт"""
+        """Отримує детальну інформацію про акаунт"""
         try:
             account_info = self.client.get_account()
-            return account_info
+            
+            # Отримуємо баланс для розрахунку загальної вартості
+            balance_info = self.get_account_balance()
+            total_value = balance_info.get('total_portfolio_value', 0) if balance_info else 0
+            
+            return {
+                'account_type': account_info.get('accountType', 'SPOT'),
+                'permissions': account_info.get('permissions', []),
+                'maker_commission': account_info.get('makerCommission', 0),
+                'taker_commission': account_info.get('takerCommission', 0),
+                'buyer_commission': account_info.get('buyerCommission', 0),
+                'seller_commission': account_info.get('sellerCommission', 0),
+                'can_trade': account_info.get('canTrade', False),
+                'can_withdraw': account_info.get('canWithdraw', False),
+                'can_deposit': account_info.get('canDeposit', False),
+                'update_time': account_info.get('updateTime', 0),
+                'total_portfolio_value': total_value,
+                'timestamp': self.client.get_server_time()['serverTime']
+            }
         except BinanceAPIException as e:
             print(f"❌ Error getting account info: {e}")
             return None
@@ -138,14 +157,22 @@ class BinanceAPI:
                         'usdt_value': 0  # Буде розраховано окремо
                     })
             
-            # Сортуємо за загальним балансом (спочатку найбільші)
-            balances.sort(key=lambda x: x['total'], reverse=True)
+            # Розраховуємо USDT вартість для кожного активу
+            balances = self._calculate_usdt_values(balances)
+            
+            # Сортуємо за USDT вартістю (спочатку найбільші)
+            balances.sort(key=lambda x: x['usdt_value'], reverse=True)
+            
+            # Розраховуємо загальну вартість портфеля
+            total_portfolio_value = sum(balance['usdt_value'] for balance in balances)
             
             return {
                 'account_type': account_info.get('accountType', 'SPOT'),
                 'permissions': account_info.get('permissions', []),
                 'balances': balances,
-                'total_assets': len(balances)
+                'total_assets': len(balances),
+                'total_portfolio_value': total_portfolio_value,
+                'timestamp': self.client.get_server_time()['serverTime']
             }
         except BinanceAPIException as e:
             print(f"❌ Error getting account balance: {e}")
@@ -154,6 +181,52 @@ class BinanceAPI:
         except Exception as e:
             print(f"❌ Unknown error getting balance: {e}")
             return self._get_demo_balance()
+
+    def _calculate_usdt_values(self, balances):
+        """Розраховує USDT вартість для кожного активу"""
+        try:
+            # Отримуємо ціни всіх пар з USDT
+            ticker_prices = self.client.get_all_tickers()
+            price_dict = {ticker['symbol']: float(ticker['price']) for ticker in ticker_prices}
+            
+            for balance in balances:
+                asset = balance['asset']
+                
+                if asset == 'USDT':
+                    balance['usdt_value'] = balance['total']
+                    balance['price_usdt'] = 1.0
+                else:
+                    # Шукаємо пару з USDT
+                    symbol = f"{asset}USDT"
+                    if symbol in price_dict:
+                        price = price_dict[symbol]
+                        balance['usdt_value'] = balance['total'] * price
+                        balance['price_usdt'] = price
+                    else:
+                        # Якщо немає прямої пари з USDT, шукаємо через BTC
+                        btc_symbol = f"{asset}BTC"
+                        if btc_symbol in price_dict and 'BTCUSDT' in price_dict:
+                            btc_price = price_dict[btc_symbol]
+                            btc_usdt_price = price_dict['BTCUSDT']
+                            price = btc_price * btc_usdt_price
+                            balance['usdt_value'] = balance['total'] * price
+                            balance['price_usdt'] = price
+                        else:
+                            balance['usdt_value'] = 0
+                            balance['price_usdt'] = 0
+            
+            return balances
+        except Exception as e:
+            print(f"❌ Error calculating USDT values: {e}")
+            # Якщо не можемо отримати ціни, повертаємо без USDT вартості
+            for balance in balances:
+                if balance['asset'] == 'USDT':
+                    balance['usdt_value'] = balance['total']
+                    balance['price_usdt'] = 1.0
+                else:
+                    balance['usdt_value'] = 0
+                    balance['price_usdt'] = 0
+            return balances
 
     def get_usdt_balance(self):
         """Отримує баланс в USDT"""
@@ -171,6 +244,47 @@ class BinanceAPI:
             print(f"❌ Unknown error getting USDT balance: {e}")
             return 10000.0
 
+    def get_current_price(self, symbol: str) -> float:
+        """Отримує поточну ціну для символу"""
+        try:
+            ticker = self.client.get_symbol_ticker(symbol=symbol)
+            return float(ticker['price'])
+        except BinanceAPIException as e:
+            print(f"❌ Error getting price for {symbol}: {e}")
+            return 0.0
+        except Exception as e:
+            print(f"❌ Unknown error getting price for {symbol}: {e}")
+            return 0.0
+
+    def get_portfolio_summary(self):
+        """Отримує короткий звіт про портфель"""
+        try:
+            balance_info = self.get_account_balance()
+            if not balance_info:
+                return None
+            
+            # Розраховуємо статистику
+            total_value = balance_info.get('total_portfolio_value', 0)
+            usdt_balance = 0
+            crypto_value = 0
+            
+            for balance in balance_info.get('balances', []):
+                if balance['asset'] == 'USDT':
+                    usdt_balance = balance['usdt_value']
+                else:
+                    crypto_value += balance['usdt_value']
+            
+            return {
+                'total_value': total_value,
+                'usdt_balance': usdt_balance,
+                'crypto_value': crypto_value,
+                'assets_count': balance_info.get('total_assets', 0),
+                'timestamp': balance_info.get('timestamp', 0)
+            }
+        except Exception as e:
+            print(f"❌ Error getting portfolio summary: {e}")
+            return None
+
     def _get_demo_balance(self):
         """Повертає демо баланс для тестування"""
         return {
@@ -182,36 +296,43 @@ class BinanceAPI:
                     'free': 8500.0,
                     'locked': 1500.0,
                     'total': 10000.0,
-                    'usdt_value': 10000.0
+                    'usdt_value': 10000.0,
+                    'price_usdt': 1.0
                 },
                 {
                     'asset': 'BTC',
                     'free': 0.15,
                     'locked': 0.05,
                     'total': 0.2,
-                    'usdt_value': 8000.0
+                    'usdt_value': 8000.0,
+                    'price_usdt': 40000.0
                 },
                 {
                     'asset': 'ETH',
                     'free': 2.5,
                     'locked': 0.5,
                     'total': 3.0,
-                    'usdt_value': 6000.0
+                    'usdt_value': 6000.0,
+                    'price_usdt': 2000.0
                 },
                 {
                     'asset': 'BNB',
                     'free': 15.0,
                     'locked': 5.0,
                     'total': 20.0,
-                    'usdt_value': 4000.0
+                    'usdt_value': 4000.0,
+                    'price_usdt': 200.0
                 },
                 {
                     'asset': 'ADA',
                     'free': 5000.0,
                     'locked': 1000.0,
                     'total': 6000.0,
-                    'usdt_value': 1200.0
+                    'usdt_value': 1200.0,
+                    'price_usdt': 0.2
                 }
             ],
-            'total_assets': 5
+            'total_assets': 5,
+            'total_portfolio_value': 29200.0,
+            'timestamp': int(datetime.datetime.now().timestamp() * 1000)
         }

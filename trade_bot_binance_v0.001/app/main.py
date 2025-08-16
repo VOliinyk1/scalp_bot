@@ -163,6 +163,7 @@ def get_account_balance():
                 "success": True,
                 "account_type": balance_info["account_type"],
                 "total_assets": balance_info["total_assets"],
+                "total_portfolio_value": balance_info.get("total_portfolio_value", 0),
                 "balances": balance_info["balances"],
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }
@@ -190,6 +191,100 @@ def get_usdt_balance():
         return {
             "success": True,
             "usdt_balance": usdt_balance,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/account/portfolio-summary")
+def get_portfolio_summary():
+    """
+    Отримує короткий звіт про портфель
+    """
+    try:
+        from app.services.binance_api import BinanceAPI
+        api = BinanceAPI()
+        summary = api.get_portfolio_summary()
+        
+        if summary:
+            return {
+                "success": True,
+                "summary": summary,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Не вдалося отримати зведення портфеля"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/bot/logs")
+def get_bot_logs(limit: int = 50):
+    """
+    Отримує логи бота
+    """
+    try:
+        from app.services.logging_service import get_bot_logs
+        logs = get_bot_logs(limit)
+        return {
+            "success": True,
+            "logs": logs,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/bot/analysis")
+def get_bot_analysis():
+    """
+    Отримує поточний аналіз сигналів
+    """
+    try:
+        from app.services.ai_signals import detect_signal
+        from app.services.smart_money import analyze_top_traders
+        from app.services.new_sentiment import analyze_sentiment
+        from app.services.risk_management import get_risk_manager
+        
+        # Отримуємо аналіз для BTCUSDT як приклад
+        symbol = "BTCUSDT"
+        
+        # Технічний аналіз
+        tech_analysis = detect_signal(symbol)
+        
+        # Smart Money аналіз
+        smart_money = analyze_top_traders(symbol)
+        
+        # GPT сентимент
+        gpt_sentiment = analyze_sentiment([], symbol=symbol)
+        
+        # Ризик-менеджмент
+        risk_manager = get_risk_manager()
+        risk_metrics = risk_manager.get_risk_metrics()
+        
+        return {
+            "success": True,
+            "analysis": {
+                "technical": tech_analysis,
+                "smart_money": smart_money,
+                "gpt_sentiment": gpt_sentiment,
+                "risk_management": {
+                    "total_exposure": risk_metrics.total_exposure,
+                    "daily_pnl": risk_metrics.daily_pnl,
+                    "max_drawdown": risk_metrics.max_drawdown,
+                    "win_rate": risk_metrics.win_rate
+                }
+            },
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
     except Exception as e:

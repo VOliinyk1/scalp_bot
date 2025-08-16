@@ -7,6 +7,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from services.logging_service import bot_logger
 
 # Додаємо корінь проекту до шляху
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,9 +16,9 @@ def check_env_file():
     """Перевіряє наявність .env файлу"""
     env_path = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / ".env"
     if not env_path.exists():
-        print("❌ Файл .env не знайдено!")
-        print("📝 Створіть файл .env з наступними змінними:")
-        print("""
+        bot_logger.error("❌ Файл .env не знайдено!")
+        bot_logger.info("📝 Створіть файл .env з наступними змінними:")
+        bot_logger.info("""
 BINANCE_API_KEY=your_binance_api_key_here
 BINANCE_API_SECRET=your_binance_api_secret_here
 DATABASE_URL=sqlite:///./trading_bot.db
@@ -31,30 +32,30 @@ FASTAPI_URL=http://localhost:8000
 def init_database():
     """Ініціалізує базу даних"""
     try:
-        print("🗄️ Ініціалізація бази даних...")
+        bot_logger.info("🗄️ Ініціалізація бази даних...")
         subprocess.run([sys.executable, "app/init_db.py"], check=True)
-        print("✅ База даних ініціалізована")
+        bot_logger.success("✅ База даних ініціалізована")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Помилка ініціалізації БД: {e}")
+        bot_logger.error(f"❌ Помилка ініціалізації БД: {e}")
         return False
 
 def test_smart_money():
     """Тестує Smart Money модуль"""
     try:
-        print("🧠 Тестування Smart Money модуля...")
+        bot_logger.info("🧠 Тестування Smart Money модуля...")
         subprocess.run([sys.executable, "app/test_smart_money.py"], check=True)
-        print("✅ Smart Money модуль працює")
+        bot_logger.success("✅ Smart Money модуль працює")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Помилка тестування: {e}")
+        bot_logger.error(f"❌ Помилка тестування: {e}")
         return False
 
 def start_server():
     """Запускає FastAPI сервер"""
-    print("🚀 Запуск FastAPI сервера...")
-    print("📱 Telegram бот буде доступний після запуску сервера")
-    print("🌐 API документація: http://localhost:8000/docs")
+    bot_logger.success("🚀 Запуск FastAPI сервера...")
+    bot_logger.info("📱 Telegram бот буде доступний після запуску сервера")
+    bot_logger.info("🌐 API документація: http://localhost:8000/docs")
     
     try:
         subprocess.run([
@@ -65,12 +66,12 @@ def start_server():
             "--port", "8000"
         ])
     except KeyboardInterrupt:
-        print("\n👋 Сервер зупинено")
+        bot_logger.info("\n👋 Сервер зупинено")
 
 def main():
     """Головна функція"""
-    print("🤖 Trade Bot - Smart Money Trading Bot")
-    print("=" * 50)
+    bot_logger.success("🤖 Trade Bot - Smart Money Trading Bot")
+    bot_logger.info("=" * 50)
     
     # Перевіряємо .env файл
     if not check_env_file():
@@ -82,7 +83,7 @@ def main():
     
     # Тестуємо Smart Money
     if not test_smart_money():
-        print("⚠️ Продовжуємо без тестування...")
+        bot_logger.warning("⚠️ Продовжуємо без тестування...")
     
     # Запускаємо сервер
     start_server()

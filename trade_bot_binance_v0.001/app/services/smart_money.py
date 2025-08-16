@@ -16,6 +16,7 @@ import joblib
 
 from app.services.binance_api import BinanceAPI as binance_api
 from app.services.cache import trading_cache, CACHE_TTL
+from app.services.logging_service import bot_logger
 
 
 # -------------------------------------------------------
@@ -390,12 +391,19 @@ def analyze_top_traders(symbol: str) -> dict:
             }
         }
         
+        # Логуємо результат Smart Money аналізу
+        bot_logger.analysis(
+            f"Smart Money аналіз для {symbol}",
+            "SMART_MONEY",
+            f"{result['signal']} (BUY: {result['p_buy']:.3f}, SELL: {result['p_sell']:.3f})"
+        )
+        
         # Зберігаємо в кеш
         trading_cache.set(final_result, CACHE_TTL["smart_money_signal"], "smart_money_analysis", symbol=symbol)
         
         return final_result
     except Exception as e:
-        print(f"Помилка Smart Money аналізу: {e}")
+        bot_logger.error(f"Помилка Smart Money аналізу для {symbol}: {e}")
         return {
             "symbol": symbol,
             "signal": "HOLD",

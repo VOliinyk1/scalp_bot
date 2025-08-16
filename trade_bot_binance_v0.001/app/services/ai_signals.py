@@ -30,6 +30,7 @@ from app.services.binance_api import BinanceAPI
 # app/ai_signals.py (в кінці detect_signal, перед return)
 from app.database import SessionLocal
 from app.models import Signal
+from app.services.logging_service import bot_logger
 
 
 # Optional, only if you have these modules in your project
@@ -290,6 +291,13 @@ def detect_signal(symbol: str, techs=None) -> dict:
         votes[gpt.get("signal", "HOLD")] += w["gpt"]
 
         final_signal = max(votes, key=votes.get)
+
+        # Логуємо результат аналізу
+        bot_logger.analysis(
+            f"AI аналіз завершено для {symbol}",
+            "AI_SIGNAL",
+            f"{final_signal} (BUY: {votes['BUY']:.2f}, SELL: {votes['SELL']:.2f}, HOLD: {votes['HOLD']:.2f})"
+        )
 
         details = {
             "tech": tech_signal,

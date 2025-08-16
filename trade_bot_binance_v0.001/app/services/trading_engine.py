@@ -18,6 +18,7 @@ from app.models import Order, Trade, Signal
 from app.services.binance_api import BinanceAPI
 from app.services.risk_management import RiskManager, get_risk_manager
 from app.services.cache import trading_cache, CACHE_TTL
+from app.services.logging_service import bot_logger
 
 # Налаштування логування
 logging.basicConfig(level=logging.INFO)
@@ -39,13 +40,13 @@ class TradingEngine:
         Запускає торговий двигун
         """
         if self.is_running:
-            logger.warning("Торговий двигун вже запущений")
+            bot_logger.warning("Торговий двигун вже запущений")
             return
         
         self.trading_pairs = trading_pairs or ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
         self.is_running = True
         
-        logger.info(f"Торговий двигун запущений для пар: {self.trading_pairs}")
+        bot_logger.success(f"Торговий двигун запущений для пар: {self.trading_pairs}")
         
         # Запускаємо основні цикли
         await asyncio.gather(
@@ -66,6 +67,8 @@ class TradingEngine:
         """
         Цикл моніторингу цін в реальному часі
         """
+        bot_logger.info("Цикл моніторингу цін запущений (частота: 5 сек)")
+        
         while self.is_running:
             try:
                 for symbol in self.trading_pairs:
@@ -92,13 +95,15 @@ class TradingEngine:
                 await asyncio.sleep(5)  # Перевіряємо кожні 5 секунд
                 
             except Exception as e:
-                logger.error(f"Помилка в циклі моніторингу цін: {e}")
+                bot_logger.error(f"Помилка в циклі моніторингу цін: {e}")
                 await asyncio.sleep(10)
     
     async def _signal_processing_loop(self):
         """
         Цикл обробки торгових сигналів
         """
+        bot_logger.info("Цикл обробки сигналів запущений (частота: 30 сек)")
+        
         while self.is_running:
             try:
                 # Отримуємо останні сигнали з бази даних
@@ -109,8 +114,12 @@ class TradingEngine:
                         Signal.created_at >= datetime.utcnow() - timedelta(minutes=5)
                     ).all()
                     
+                    if latest_signals:
+                        bot_logger.info(f"Знайдено {len(latest_signals)} нових сигналів")
+                    
                     for signal in latest_signals:
                         if signal.final_signal in ["BUY", "SELL"]:
+                            bot_logger.signal(f"Обробка сигналу", signal.symbol, signal.final_signal, 0.8)
                             await self._process_trading_signal(signal)
                             
                 finally:
@@ -119,24 +128,39 @@ class TradingEngine:
                 await asyncio.sleep(30)  # Перевіряємо кожні 30 секунд
                 
             except Exception as e:
-                logger.error(f"Помилка в циклі обробки сигналів: {e}")
+                bot_logger.error(f"Помилка в циклі обробки сигналів: {e}")
                 await asyncio.sleep(60)
     
     async def _risk_monitoring_loop(self):
         """
         Цикл моніторингу ризиків
         """
+        bot_logger.info("Цикл моніторингу ризиків запущений (частота: 60 сек)")
+        
         while self.is_running:
             try:
                 # Отримуємо метрики ризику
                 risk_metrics = self.risk_manager.get_risk_metrics()
                 
+                # Логуємо метрики кожні 10 циклів (10 хвилин)
+                if hasattr(self, '_risk_log_counter'):
+                    self._risk_log_counter += 1
+                else:
+                    self._risk_log_counter = 0
+                
+                if self._risk_log_counter % 10 == 0:
+                    bot_logger.risk(
+                        f"Ризик-менеджмент: P&L: {risk_metrics.daily_pnl:.2f} USDT, Win Rate: {risk_metrics.win_rate:.1%}",
+                        "MEDIUM",
+                        risk_metrics.total_exposure
+                    )
+                
                 # Перевіряємо критичні рівні ризику
                 if risk_metrics.total_exposure > self.risk_manager.config.max_total_exposure_usdt * 0.8:
-                    logger.warning(f"Висока експозиція: {risk_metrics.total_exposure:.2f} USDT")
+                    bot_logger.warning(f"Висока експозиція: {risk_metrics.total_exposure:.2f} USDT")
                 
                 if risk_metrics.daily_pnl < -self.risk_manager.config.max_daily_loss_usdt * 0.8:
-                    logger.warning(f"Високий денний збиток: {risk_metrics.daily_pnl:.2f} USDT")
+                    bot_logger.warning(f"Високий денний збиток: {risk_metrics.daily_pnl:.2f} USDT")
                 
                 # Зберігаємо метрики в кеш
                 trading_cache.set(
@@ -148,7 +172,7 @@ class TradingEngine:
                 await asyncio.sleep(60)  # Перевіряємо кожну хвилину
                 
             except Exception as e:
-                logger.error(f"Помилка в циклі моніторингу ризиків: {e}")
+                bot_logger.error(f"Помилка в циклі моніторингу ризиків: {e}")
                 await asyncio.sleep(120)
     
     async def _order_management_loop(self):

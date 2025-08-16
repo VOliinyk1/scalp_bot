@@ -1,5 +1,6 @@
 import openai
 from app.config import OPENAI_API_KEY
+from app.services.logging_service import bot_logger
 
 
 openai.api_key = OPENAI_API_KEY
@@ -28,12 +29,20 @@ def analyze_sentiment(news: list[str], symbol: str, techs: dict) -> dict:
         else:
             signal = "HOLD"
 
+        # Логуємо результат GPT аналізу
+        bot_logger.analysis(
+            f"GPT сентимент аналіз для {symbol}",
+            "GPT_SENTIMENT",
+            f"{signal} - {content[:50]}..."
+        )
+
         return {
             "signal": signal,
             "raw": content
         }
 
     except Exception as e:
+        bot_logger.error(f"Помилка GPT сентимент аналізу для {symbol}: {e}")
         return {
             "signal": "HOLD",
             "error": str(e)
