@@ -3,8 +3,8 @@ import os
 import asyncio
 import requests
 from html import escape as h
-from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
+from aiogram import Bot, Dispatcher, types, filters
+# executor був видалений в aiogram 3.x, використовуємо asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,10 +13,10 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # перевір, що змі�
 FASTAPI_URL = os.getenv("FASTAPI_URL", "http://localhost:8000")
 
 # HTML-режим безпечніший за Markdown (менше проблем з парсингом)
-bot = Bot(token=TELEGRAM_TOKEN, parse_mode="HTML")
-dp = Dispatcher(bot)
+bot = Bot(token=TELEGRAM_TOKEN)
+dp = Dispatcher()
 
-@dp.message_handler(commands=["start", "help"])
+@dp.message(filters.Command("start", "help"))
 async def start_handler(message: types.Message):
     help_text = """
 🤖 <b>Торговий бот - Команди</b>
@@ -41,7 +41,7 @@ async def start_handler(message: types.Message):
     """
     await message.answer(help_text)
 
-@dp.message_handler(commands=["ai_signal"])
+@dp.message(filters.Command("ai_signal"))
 async def ai_signal_handler(message: types.Message):
     try:
         parts = message.text.strip().split()
@@ -149,10 +149,11 @@ async def ai_signal_handler(message: types.Message):
 def start_telegram_bot():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    executor.start_polling(dp, skip_updates=True)
+    # Використовуємо asyncio замість executor для aiogram 3.x
+    loop.run_until_complete(dp.start_polling(bot))
 
 # app/telegram_bot.py (додай)
-@dp.message_handler(commands=["last"])
+@dp.message(filters.Command("last"))
 async def last_signal_handler(message: types.Message):
     parts = message.text.strip().split()
     if len(parts) != 2:
@@ -173,7 +174,7 @@ async def last_signal_handler(message: types.Message):
     except Exception as e:
         await message.answer(f"❌ Внутрішня помилка: <i>{e}</i>")
 
-@dp.message_handler(commands=["smart_money"])
+@dp.message(filters.Command("smart_money"))
 async def smart_money_handler(message: types.Message):
     try:
         parts = message.text.strip().split()
@@ -212,7 +213,7 @@ async def smart_money_handler(message: types.Message):
         await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
 
 
-@dp.message_handler(commands=["cache_stats"])
+@dp.message(filters.Command("cache_stats"))
 async def cache_stats_handler(message: types.Message):
     try:
         resp = requests.get(f"{FASTAPI_URL}/cache/stats", timeout=10)
@@ -238,7 +239,7 @@ async def cache_stats_handler(message: types.Message):
     except Exception as e:
         await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
 
-@dp.message_handler(commands=["cache_clear"])
+@dp.message(filters.Command("cache_clear"))
 async def cache_clear_handler(message: types.Message):
     try:
         resp = requests.post(f"{FASTAPI_URL}/cache/clear", timeout=10)
@@ -253,6 +254,8 @@ async def cache_clear_handler(message: types.Message):
         
     except Exception as e:
         await message.answer(f"❌ Внутрішня помилка: <i>{h(str(e))}</i>")
+
+
 
 # якщо потрібно запускати окремо:
 # if __name__ == "__main__":
