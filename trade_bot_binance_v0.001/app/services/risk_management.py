@@ -88,7 +88,8 @@ class RiskConfig:
     max_volatility_threshold: float = 0.05  # Максимальна волатильність (5%)
     
     # Ліквідність
-    min_liquidity_usdt: float = 1000000.0  # Мінімальна ліквідність в USDT
+    min_liquidity_usdt: float = 1000000.0  # Мінімальна ліквідність в USDT (fallback)
+    min_liquidity_to_position_ratio: float = 10.0  # k: вимога ліквідності як k * розмір позиції
 
 class RiskManager:
     """Менеджер ризиків"""
@@ -113,10 +114,12 @@ class RiskManager:
         if volatility > self.config.max_volatility_threshold:
             risk_amount *= 0.5  # Зменшуємо розмір при високій волатильності
         
-        # Враховуємо ліквідність
+        # Враховуємо ліквідність (динамічне правило)
         liquidity = self._get_symbol_liquidity(symbol)
-        if liquidity < self.config.min_liquidity_usdt:
-            risk_amount *= 0.3  # Зменшуємо розмір при низькій ліквідності
+        # Якщо ліквідність менша за k * (плановий розмір), зменшуємо ризик
+        planned_position_usdt = min(risk_amount, self.config.max_position_size_usdt)
+        if liquidity < self.config.min_liquidity_to_position_ratio * planned_position_usdt:
+            risk_amount *= 0.5  # пом'якшене зниження замість жорсткого блоку на етапі розміру
         
         # Розраховуємо кількість
         position_size_usdt = min(risk_amount, self.config.max_position_size_usdt)
@@ -162,10 +165,14 @@ class RiskManager:
         if volatility > self.config.max_volatility_threshold:
             return False, f"Волатильність {volatility:.4f} перевищує ліміт {self.config.max_volatility_threshold}"
         
-        # Перевіряємо ліквідність
+        # Перевіряємо ліквідність (динамічне правило): liquidity >= k * position_value
         liquidity = self._get_symbol_liquidity(symbol)
-        if liquidity < self.config.min_liquidity_usdt:
-            return False, f"Ліквідність {liquidity:.0f} USDT нижче мінімуму {self.config.min_liquidity_usdt} USDT"
+        required_liquidity = max(self.config.min_liquidity_usdt, self.config.min_liquidity_to_position_ratio * position_value)
+        if liquidity < required_liquidity:
+            return False, (
+                f"Ліквідність {liquidity:.0f} USDT нижче необхідної {required_liquidity:.0f} USDT "
+                f"(k={self.config.min_liquidity_to_position_ratio:.1f}×позиція або мінімум {self.config.min_liquidity_usdt:.0f})"
+            )
         
         return True, "Угода дозволена"
     
